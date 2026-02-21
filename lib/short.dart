@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mallard/mallard.dart' as t;
 import 'package:mallard/mallard.dart' hide Task;
 
@@ -59,12 +61,12 @@ extension type const Res<S, F>._(Result<S, F> _result) {
 /// {@macro mallard.task}
 extension type const Task<S, F>._(t.Task<S, F> _task) {
   /// {@macro mallard.task}
-  Task(Future<Res<S, F>> Function() run)
-    : this._(t.Task(run as Future<Result<S, F>> Function()));
+  Task(FutureOr<Res<S, F>> Function() run)
+    : this._(t.Task(run as FutureOr<Result<S, F>> Function()));
 
   /// {@macro mallard.task.attempt}
   Task.attempt({
-    required Future<S> Function() run,
+    required FutureOr<S> Function() run,
     required F Function(Object e) handle,
   }) : this._(t.Task.attempt(run: run, handle: handle));
 
@@ -80,12 +82,12 @@ extension type const Task<S, F>._(t.Task<S, F> _task) {
       Task._(_task.apply(onRun as Result<S2, F2> Function(Result<S, F>)));
 
   /// {@macro mallard.task.then}
-  Task<S2, F> then<S2>(Future<Res<S2, F>> Function(S ok) run) =>
-      Task._(_task.then(run as Future<Result<S2, F>> Function(S)));
+  Task<S2, F> then<S2>(FutureOr<Res<S2, F>> Function(S ok) run) =>
+      Task._(_task.then(run as FutureOr<Result<S2, F>> Function(S)));
 
   /// {@macro mallard.task.then_attempt}
   Task<S2, F> thenAttempt<S2>({
-    required Future<S2> Function(S ok) run,
+    required FutureOr<S2> Function(S ok) run,
     required F Function(Object e) handle,
   }) => Task._(_task.thenAttempt(run: run, handle: handle));
 
@@ -120,5 +122,5 @@ extension type const Task<S, F>._(t.Task<S, F> _task) {
   }) => Task._(_task.ensure(check: check, otherwise: otherwise));
 
   /// {@macro mallard.task.run}
-  Future<Res<S, F>> run() => _task.run() as Future<Res<S, F>>;
+  FutureOr<Res<S, F>> run() => _task.run() as FutureOr<Res<S, F>>;
 }

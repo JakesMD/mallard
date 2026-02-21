@@ -2,6 +2,8 @@
 // and converts them to failures.
 // ignore_for_file: avoid_catches_without_on_clauses
 
+import 'dart:async';
+
 import 'package:mallard/mallard.dart';
 
 /// {@template mallard.task}
@@ -11,7 +13,7 @@ import 'package:mallard/mallard.dart';
 /// {@endtemplate}
 class Task<S, F> {
   /// {@macro mallard.task}
-  const Task(Future<Result<S, F>> Function() run) : _run = run;
+  const Task(FutureOr<Result<S, F>> Function() run) : _run = run;
 
   /// {@template mallard.task.attempt}
   ///
@@ -20,7 +22,7 @@ class Task<S, F> {
   ///
   /// {@endtemplate}
   factory Task.attempt({
-    required Future<S> Function() run,
+    required FutureOr<S> Function() run,
     required F Function(Object e) handle,
   }) => Task(() async {
     try {
@@ -71,7 +73,7 @@ class Task<S, F> {
   factory Task.fail(F value, [Object? exception, StackTrace? stackTrace]) =>
       Task(() async => Failure(value, exception, stackTrace));
 
-  final Future<Result<S, F>> Function() _run;
+  final FutureOr<Result<S, F>> Function() _run;
 
   /// {@template mallard.task.run}
   ///
@@ -83,7 +85,7 @@ class Task<S, F> {
   /// [Mallard.onTaskFailure] callbacks based on the outcome of the task.
   ///
   /// {@endtemplate}
-  Future<Result<S, F>> run() async {
+  FutureOr<Result<S, F>> run() async {
     final r = await _run();
 
     if (r.succeeded) {
@@ -115,7 +117,7 @@ class Task<S, F> {
   /// succeeds.
   ///
   /// {@endtemplate}
-  Task<S2, F> then<S2>(Future<Result<S2, F>> Function(S success) run) => Task(
+  Task<S2, F> then<S2>(FutureOr<Result<S2, F>> Function(S success) run) => Task(
     () async {
       final r = await _run();
       return r.resolve(
@@ -137,7 +139,7 @@ class Task<S, F> {
   ///
   /// {@endtemplate}
   Task<S2, F> thenAttempt<S2>({
-    required Future<S2> Function(S success) run,
+    required FutureOr<S2> Function(S success) run,
     required F Function(Object e) handle,
   }) => Task(() async {
     final r = await _run();

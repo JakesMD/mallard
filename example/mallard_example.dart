@@ -1,24 +1,47 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:mallard/mallard.dart';
 
-enum TemperatureFetchException { unknown }
+enum SettingsLoadException { notFound, invalidJson, permissionDenied }
 
-Task<int, TemperatureFetchException> fetchTemperature(String city) =>
+class Settings {
+  Settings.fromJson(Map<String, dynamic> json) : name = json['name'] as String;
+
+  final String name;
+}
+
+Task<Settings, SettingsLoadException> loadSettings() =>
     Task.attempt(
-      run: () async => '20 degrees Celsius',
-      handle: (eexception) => TemperatureFetchException.unknown,
-    ).convert((text) => int.parse(text.replaceAll('degrees Celsius', '')));
+          run: () => File('settings.json').readAsString(),
+          handle: (exception) => exception is PathNotFoundException
+              ? SettingsLoadException.notFound
+              : SettingsLoadException.permissionDenied,
+        )
+        .thenAttempt(
+          run: (jsonString) => jsonDecode(jsonString) as Map<String, dynamic>,
+          handle: (_) => SettingsLoadException.invalidJson,
+        )
+        .ensure(
+          check: (json) => json.containsKey('name') && json['name'] is String,
+          otherwise: (_) => SettingsLoadException.invalidJson,
+        )
+        .convert(Settings.fromJson);
 
 void main() async {
-  Mallard.onTaskSuccess = (success) => print('Task succeeded with: $success');
-  Mallard.onTaskFailure = (failure, exception, stack) =>
-      print('Task failed with: $failure, exception: $exception stack: $stack');
+  Mallard.onTaskFailure = (failure, exception, stackTrace) =>
+      print('[Mallard callback] Task failed with exception: $exception');
 
-  final result = await fetchTemperature('New York').run();
+  final result = await loadSettings().run();
 
   final message = result.resolve(
-    onSuccess: (value) => 'The temperature is $value°C',
-    onFailure: (exception) => 'Failed to fetch temperature: $exception',
+    onSuccess: (settings) => 'Settings loaded: ${settings.name}',
+    onFailure: (error) => switch (error) {
+      .notFound => 'Settings file not found.',
+      .invalidJson => 'Settings file is corrupted.',
+      .permissionDenied => 'Check your app storage permissions.',
+    },
   );
 
-  print(message);
+  print('\nmessage: $message');
 }
