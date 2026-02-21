@@ -1,0 +1,12 @@
+{
+    "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+    },
+    "files.exclude": {
+        ".dart_tool": true,
+        "coverage": true,
+        "build": true,
+        "analysis_options.yaml": true,
+        "pubspec.lock": true,
+    },
+}
