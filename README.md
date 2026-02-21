@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://pub.dev/packages/mallard"><img src="https://img.shields.io/pub/v/mallard?label=pub.dev&logo=dart" alt="pub"></a>
-  <a href="https://github.com/jakesmd/mallard/actions/workflows/dart_ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/jakesmd/mallard/dart_ci.yml?branch=main&label=tests&logo=github" alt="tests"></a>
+  <a href="https://github.com/jakesmd/mallard/actions/workflows/dart_ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/jakesmd/mallard/dart_ci.yml?branch=main&label=checks&logo=github" alt="checks"></a>
   <img src="https://img.shields.io/badge/coverage-100%25-brightgreen?logo=codecov&logoColor=white" alt="codecov">
 </p>
 

@@ -1,16 +1,17 @@
-name: mallard
-description: Railway Oriented Programming for Dart. Functional Result and Task types for type-safe error handling.
-version: 1.0.0
+name: mallard_bloc
+description: Take advantage of Mallards railway oriented programming to radically simplify bloc applications.
+version: 0.0.1
 repository: https://github.com/JakesMD/mallard
+
+resolution: workspace
 
 environment:
   sdk: ^3.11.0
 
-workspace:
-  - packages/mallard_bloc
-
 dependencies:
+  bloc: ^9.2.0
   equatable: ^2.0.8
+  mallard: ^1.0.0
 
 dev_dependencies:
   test: ^1.25.6
