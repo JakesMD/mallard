@@ -1,5 +1,5 @@
 name: mallard
-description: A starting point for Dart libraries or applications.
+description: Railway Oriented Programming for Dart. Functional Result and Task types for type-safe error handling.
 version: 1.0.0
 repository: https://github.com/JakesMD/mallard
 
