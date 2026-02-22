@@ -35,8 +35,8 @@ explicitly and type-safely.
 **Creating a result:**
 
 ```dart
-Result<Map, ParseError> result = Success({'version': '1.0.0'});
-Result<Map, ParseError> result = Failure(ParseError.invalidJson);
+const result = Success({'version': '1.0.0'});
+const result = Failure(ParseError.invalidJson);
 ```
 
 **Working with a result:**
@@ -166,10 +166,10 @@ final newTask = task
 
 ### Maybe
 
-`Maybe` represents a value that may or may not have been provided. Use
-`Present<T>` for provided values and `Absent` for absent values. This is useful
-in functions like `copyWith` where you need to distinguish between "not
-provided" and "explicitly null".
+`Maybe` represents a value that may or may not have been provided. Use `Present`
+for provided values and `Absent` for absent values. This is useful in functions
+like `copyWith` where you need to distinguish between "not provided" and
+"explicitly null".
 
 **Creating a maybe:**
 
@@ -257,8 +257,8 @@ Mallard provides `short.dart` as an example:
 import 'package:mallard/short.dart';
 
 // Type aliases
-final ok = Res<Map, ParseError>.ok({'version': '1.0.0'});
-final err = Res<Map, ParseError>.err(ParseError.invalidJson);
+final ok = Res.ok({'version': '1.0.0'});
+final err = Res.err(ParseError.invalidJson);
 
 // Parameter aliases
 result.resolve(
