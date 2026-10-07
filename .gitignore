@@ -12,3 +12,6 @@ pubspec.lock
 # Generated files
 build/
 coverage/
+
+# Agent files
+.claude/
