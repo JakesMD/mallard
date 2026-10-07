@@ -53,7 +53,7 @@ sealed class Maybe<T> {
 /// Represents a present value.
 ///
 /// {@endtemplate}
-final class Present<T> extends Maybe<T> with EquatableMixin {
+final class Present<T> extends Maybe<T> with Equatable {
   /// {@macro mallard.present}
   const Present(this.value);
 

@@ -123,7 +123,7 @@ abstract class Result<S, F> {
 /// Represents a successful result.
 ///
 /// {@endtemplate}
-class Success<S, F> extends Result<S, F> with EquatableMixin {
+class Success<S, F> extends Result<S, F> with Equatable {
   /// {@macro mallard.success}
   const Success(this.value);
 
@@ -142,7 +142,7 @@ class Success<S, F> extends Result<S, F> with EquatableMixin {
 /// Represents a failed result.
 ///
 /// {@endtemplate}
-class Failure<S, F> extends Result<S, F> with EquatableMixin {
+class Failure<S, F> extends Result<S, F> with Equatable {
   /// {@macro mallard.failure}
   const Failure(this.value, [this.exception, this.stackTrace]);
 

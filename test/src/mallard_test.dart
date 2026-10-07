@@ -9,8 +9,8 @@ void main() {
     group('onTaskSuccess', () {
       test(
         requirement(
-          When: 'Custom callback is set for onTaskSuccess',
-          Then: 'The custom callback should be called with the success value',
+          whenever: 'Custom callback is set for onTaskSuccess',
+          then: 'The custom callback should be called with the success value',
         ),
         procedure(() {
           var callbackCalled = false;
@@ -30,9 +30,10 @@ void main() {
     group('onTaskFailure', () {
       test(
         requirement(
-          When: 'Custom callback is set for onTaskFailure',
-          Then:
-              '''The custom callback should be called with the failure value, exception, and stack trace''',
+          whenever: 'Custom callback is set for onTaskFailure',
+          then:
+              'The custom callback should be called with the failure value, '
+              'exception, and stack trace',
         ),
         procedure(() {
           var callbackCalled = false;

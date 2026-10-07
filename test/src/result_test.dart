@@ -9,9 +9,9 @@ void main() {
     group('resolve', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'the result is resolved',
-          Then: 'the success function is called',
+          given: 'a successful result',
+          whenever: 'the result is resolved',
+          then: 'the success function is called',
         ),
         procedure(() {
           final result = const Success<int, dynamic>(1).resolve(
@@ -25,9 +25,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'the result is resolved',
-          Then: 'the failure function is called',
+          given: 'a failed result',
+          whenever: 'the result is resolved',
+          then: 'the failure function is called',
         ),
         procedure(() {
           final result = const Failure<int, String>('error').resolve(
@@ -43,9 +43,9 @@ void main() {
     group('convertBoth', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'the result is converted',
-          Then: 'the success function is called',
+          given: 'a successful result',
+          whenever: 'the result is converted',
+          then: 'the success function is called',
         ),
         procedure(() {
           final result = const Success<int, dynamic>(1).convertBoth(
@@ -59,9 +59,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'the result is converted',
-          Then: 'the failure function is called',
+          given: 'a failed result',
+          whenever: 'the result is converted',
+          then: 'the failure function is called',
         ),
         procedure(() {
           final result = Failure<int, String>('error', 1, fakeStack)
@@ -78,9 +78,9 @@ void main() {
     group('convert', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'the result is converted',
-          Then: 'the success function is called',
+          given: 'a successful result',
+          whenever: 'the result is converted',
+          then: 'the success function is called',
         ),
         procedure(() {
           final result = const Success<int, dynamic>(
@@ -93,9 +93,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'the result is converted',
-          Then:
+          given: 'a failed result',
+          whenever: 'the result is converted',
+          then:
               'the failure function is not called and the failure is unchanged',
         ),
         procedure(() {
@@ -113,9 +113,9 @@ void main() {
     group('convertFailure', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'the result is converted',
-          Then:
+          given: 'a successful result',
+          whenever: 'the result is converted',
+          then:
               'the failure function is not called and the success is unchanged',
         ),
         procedure(() {
@@ -129,9 +129,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'the result is converted',
-          Then: 'the failure function is called',
+          given: 'a failed result',
+          whenever: 'the result is converted',
+          then: 'the failure function is called',
         ),
         procedure(() {
           final result = Failure<int, String>(
@@ -148,21 +148,19 @@ void main() {
     group('recoverWhen', () {
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'the result is recovered with a check that matches the failure',
-          Then:
-              '''the result is a success with the value from the recovery function''',
+          given: 'a failed result',
+          whenever:
+              'the result is recovered with a check that matches the failure',
+          then:
+              'the result is a success with the value from the recovery '
+              'function',
         ),
         procedure(() {
-          final result =
-              Failure<int, String>(
-                'error',
-                1,
-                StackTrace.fromString('stack'),
-              ).recoverWhen(
-                check: (error) => error == 'error',
-                then: (error) => 1,
-              );
+          final result = Failure<int, String>(
+            'error',
+            1,
+            StackTrace.fromString('stack'),
+          ).recoverWhen(check: (error) => error == 'error', then: (error) => 1);
 
           expect(result, const Success<int, String>(1));
         }),
@@ -170,10 +168,11 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When:
-              '''the result is recovered with a check that does not match the failure''',
-          Then: 'the result is unchanged',
+          given: 'a failed result',
+          whenever:
+              'the result is recovered with a check that does not match '
+              'the failure',
+          then: 'the result is unchanged',
         ),
         procedure(() {
           final result = Failure<int, String>('error', 1, fakeStack)
@@ -190,18 +189,16 @@ void main() {
     group('ensure', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'the result is ensured with a check that matches the success',
-          Then: 'the result is unchanged',
+          given: 'a successful result',
+          whenever:
+              'the result is ensured with a check that matches the success',
+          then: 'the result is unchanged',
         ),
         procedure(() {
-          final result =
-              const Success<int, String>(
-                1,
-              ).ensure(
-                check: (value) => value == 1,
-                otherwise: (value) => fail('Should not be called'),
-              );
+          final result = const Success<int, String>(1).ensure(
+            check: (value) => value == 1,
+            otherwise: (value) => fail('Should not be called'),
+          );
 
           expect(result, const Success<int, String>(1));
         }),
@@ -209,20 +206,18 @@ void main() {
 
       test(
         requirement(
-          Given: 'a successful result',
-          When:
-              '''the result is ensured with a check that does not match the success''',
-          Then:
-              '''the result is a failure with the value from the otherwise function''',
+          given: 'a successful result',
+          whenever:
+              'the result is ensured with a check that does not match the '
+              'success',
+          then:
+              'the result is a failure with the value from the otherwise '
+              'function',
         ),
         procedure(() {
-          final result =
-              const Success<int, String>(
-                1,
-              ).ensure(
-                check: (value) => value == 2,
-                otherwise: (value) => 'error',
-              );
+          final result = const Success<int, String>(
+            1,
+          ).ensure(check: (value) => value == 2, otherwise: (value) => 'error');
 
           expect(result, const Failure<int, String>('error'));
         }),
@@ -232,9 +227,9 @@ void main() {
     group('asSuccess', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'asSuccess is called',
-          Then: 'the success value is returned',
+          given: 'a successful result',
+          whenever: 'asSuccess is called',
+          then: 'the success value is returned',
         ),
         procedure(() {
           const result = Success<int, dynamic>(1);
@@ -247,9 +242,9 @@ void main() {
     group('asFailure', () {
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'asFailure is called',
-          Then: 'the failure value is returned',
+          given: 'a failed result',
+          whenever: 'asFailure is called',
+          then: 'the failure value is returned',
         ),
         procedure(() {
           const result = Failure<int, String>('error');
@@ -262,9 +257,9 @@ void main() {
     group('succeeded', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'succeeded is called',
-          Then: 'returns true',
+          given: 'a successful result',
+          whenever: 'succeeded is called',
+          then: 'returns true',
         ),
         procedure(() {
           const result = Success<int, dynamic>(1);
@@ -275,9 +270,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'succeeded is called',
-          Then: 'returns false',
+          given: 'a failed result',
+          whenever: 'succeeded is called',
+          then: 'returns false',
         ),
         procedure(() {
           const result = Failure<int, String>('error');
@@ -290,9 +285,9 @@ void main() {
     group('failed', () {
       test(
         requirement(
-          Given: 'a successful result',
-          When: 'failed is called',
-          Then: 'returns false',
+          given: 'a successful result',
+          whenever: 'failed is called',
+          then: 'returns false',
         ),
         procedure(() {
           const result = Success<int, dynamic>(1);
@@ -303,9 +298,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a failed result',
-          When: 'failed is called',
-          Then: 'returns true',
+          given: 'a failed result',
+          whenever: 'failed is called',
+          then: 'returns true',
         ),
         procedure(() {
           const result = Failure<int, String>('error');
@@ -319,9 +314,9 @@ void main() {
   group('Success tests', () {
     test(
       requirement(
-        Given: 'a successful result',
-        When: 'the value is accessed',
-        Then: 'the value is returned',
+        given: 'a successful result',
+        whenever: 'the value is accessed',
+        then: 'the value is returned',
       ),
       procedure(() {
         expect(const Success<int, String>(1).value, 1);
@@ -333,9 +328,9 @@ void main() {
   group('Failure tests', () {
     test(
       requirement(
-        Given: 'a failed result',
-        When: 'the value is accessed',
-        Then: 'the value is returned',
+        given: 'a failed result',
+        whenever: 'the value is accessed',
+        then: 'the value is returned',
       ),
       procedure(() {
         expect(const Failure<int, String>('error').value, 'error');

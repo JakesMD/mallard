@@ -14,7 +14,7 @@ import 'package:mallard_bloc/mallard_bloc.dart';
 /// the failure or success values.
 ///
 /// {@endtemplate}
-class TaskBlocState<S, F> with EquatableMixin {
+class TaskBlocState<S, F> with Equatable {
   /// {@macro TaskBlocState}
   TaskBlocState({required this.result, required this.status});
 

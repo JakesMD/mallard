@@ -7,8 +7,8 @@ void main() {
     group('nothing', () {
       test(
         requirement(
-          When: 'nothing is called',
-          Then: 'returns an instance of Nothing',
+          whenever: 'nothing is called',
+          then: 'returns an instance of Nothing',
         ),
         procedure(() {
           expect(nothing, isA<Nothing>());

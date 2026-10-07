@@ -7,9 +7,9 @@ void main() {
     group('Maybe.from', () {
       test(
         requirement(
-          Given: 'a non-null value',
-          When: 'Maybe.from is called',
-          Then: 'returns a present maybe containing the value',
+          given: 'a non-null value',
+          whenever: 'Maybe.from is called',
+          then: 'returns a present maybe containing the value',
         ),
         procedure(() {
           final result = Maybe.from(1);
@@ -20,9 +20,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a null value',
-          When: 'Maybe.from is called',
-          Then: 'returns an absent maybe',
+          given: 'a null value',
+          whenever: 'Maybe.from is called',
+          then: 'returns an absent maybe',
         ),
         procedure(() {
           final result = Maybe.from(null);
@@ -35,9 +35,9 @@ void main() {
     group('resolve', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'the maybe is resolved',
-          Then: 'the [onPresent] function is called',
+          given: 'a present value',
+          whenever: 'the maybe is resolved',
+          then: 'the [onPresent] function is called',
         ),
         procedure(() {
           final result = present(1).resolve(
@@ -51,9 +51,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'the maybe is resolved',
-          Then: 'the [onAbsent] function is called',
+          given: 'an absent value',
+          whenever: 'the maybe is resolved',
+          then: 'the [onAbsent] function is called',
         ),
         procedure(() {
           final result = absent<String>().resolve(
@@ -69,9 +69,9 @@ void main() {
     group('convert', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'the maybe is converted',
-          Then: 'returns a new maybe with the new value',
+          given: 'a present value',
+          whenever: 'the maybe is converted',
+          then: 'returns a new maybe with the new value',
         ),
         procedure(() {
           final result = present(1).convert((value) => value + 1);
@@ -82,9 +82,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'the maybe is converted',
-          Then: 'returns an absent maybe',
+          given: 'an absent value',
+          whenever: 'the maybe is converted',
+          then: 'returns an absent maybe',
         ),
         procedure(() {
           final result = absent<int>().convert((value) => value + 1);
@@ -97,9 +97,9 @@ void main() {
     group('filter', () {
       test(
         requirement(
-          Given: 'a present value that satisfies the predicate',
-          When: 'the maybe is filtered',
-          Then: 'returns the original maybe',
+          given: 'a present value that satisfies the predicate',
+          whenever: 'the maybe is filtered',
+          then: 'returns the original maybe',
         ),
         procedure(() {
           final result = present(1).filter((value) => value > 0);
@@ -110,9 +110,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a present value that does not satisfy the predicate',
-          When: 'the maybe is filtered',
-          Then: 'returns an absent maybe',
+          given: 'a present value that does not satisfy the predicate',
+          whenever: 'the maybe is filtered',
+          then: 'returns an absent maybe',
         ),
         procedure(() {
           final result = present(1).filter((value) => value < 0);
@@ -123,9 +123,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'the maybe is filtered',
-          Then: 'returns an absent maybe',
+          given: 'an absent value',
+          whenever: 'the maybe is filtered',
+          then: 'returns an absent maybe',
         ),
         procedure(() {
           final result = absent<int>().filter((value) => value > 0);
@@ -138,9 +138,9 @@ void main() {
     group('isPresent', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'isPresent is called',
-          Then: 'returns true',
+          given: 'a present value',
+          whenever: 'isPresent is called',
+          then: 'returns true',
         ),
         procedure(() {
           expect(present(1).isPresent, isTrue);
@@ -149,9 +149,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'isPresent is called',
-          Then: 'returns false',
+          given: 'an absent value',
+          whenever: 'isPresent is called',
+          then: 'returns false',
         ),
         procedure(() {
           expect(absent<String>().isPresent, isFalse);
@@ -162,9 +162,9 @@ void main() {
     group('isAbsent', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'isAbsent is called',
-          Then: 'returns false',
+          given: 'a present value',
+          whenever: 'isAbsent is called',
+          then: 'returns false',
         ),
         procedure(() {
           expect(present(1).isAbsent, isFalse);
@@ -173,9 +173,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'isAbsent is called',
-          Then: 'returns true',
+          given: 'an absent value',
+          whenever: 'isAbsent is called',
+          then: 'returns true',
         ),
         procedure(() {
           expect(absent<String>().isAbsent, isTrue);
@@ -186,9 +186,9 @@ void main() {
     group('asNullable', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'asNullable is called',
-          Then: 'returns the value',
+          given: 'a present value',
+          whenever: 'asNullable is called',
+          then: 'returns the value',
         ),
         procedure(() {
           expect(present(1).asNullable, 1);
@@ -197,9 +197,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'an absent value',
-          When: 'asNullable is called',
-          Then: 'returns null',
+          given: 'an absent value',
+          whenever: 'asNullable is called',
+          then: 'returns null',
         ),
         procedure(() {
           expect(absent<String>().asNullable, isNull);
@@ -210,9 +210,9 @@ void main() {
     group('present', () {
       test(
         requirement(
-          Given: 'a present value',
-          When: 'a present is created',
-          Then: 'returns a [Present] instance with the value',
+          given: 'a present value',
+          whenever: 'a present is created',
+          then: 'returns a [Present] instance with the value',
         ),
         procedure(() {
           final p = present(1);
@@ -226,8 +226,8 @@ void main() {
     group('absent', () {
       test(
         requirement(
-          When: 'an absent is created',
-          Then: 'returns a [Absent] instance',
+          whenever: 'an absent is created',
+          then: 'returns a [Absent] instance',
         ),
         procedure(() {
           final a = absent<int>();
@@ -240,9 +240,9 @@ void main() {
     group('maybe', () {
       test(
         requirement(
-          Given: 'a non-null value',
-          When: 'maybe is called',
-          Then: 'returns a present maybe',
+          given: 'a non-null value',
+          whenever: 'maybe is called',
+          then: 'returns a present maybe',
         ),
         procedure(() {
           final result = maybe(1);
@@ -253,9 +253,9 @@ void main() {
 
       test(
         requirement(
-          Given: 'a null value',
-          When: 'maybe is called',
-          Then: 'returns an absent maybe',
+          given: 'a null value',
+          whenever: 'maybe is called',
+          then: 'returns an absent maybe',
         ),
         procedure(() {
           final result = maybe(null);

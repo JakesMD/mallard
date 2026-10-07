@@ -12,12 +12,12 @@ workspace:
   - packages/mallard_bloc
 
 dependencies:
-  equatable: ^2.0.8
+  equatable: ^3.0.0
 
 dev_dependencies:
   test: ^1.25.6
-  test_beautifier: ^1.1.0
-  very_good_analysis: ^10.1.0
+  test_beautifier: ^3.0.0
+  very_good_analysis: ^11.0.0
 
 screenshots:
   - description: The mallard package image.
