@@ -435,9 +435,14 @@ Mallard.onTaskFailure = (failure, exception, stackTrace) {
 // Same signatures, fired for each result a ResultStream emits
 Mallard.onStreamSuccess = (value) {};
 Mallard.onStreamFailure = (failure, exception, stackTrace) {};
+
+// Fired on each restartWhen restart, with nulls on close
+Mallard.onStreamRestart = (failure, exception, stackTrace, attempt) {
+  logger.warning('Stream restarted (attempt $attempt): $failure');
+};
 ```
 
-Only the outermost run fires callbacks:
+Only the outermost run fires callbacks, apart from `onStreamRestart`:
 
 ```dart
 final shoutedCity = Task(() async {

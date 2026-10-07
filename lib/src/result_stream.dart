@@ -385,7 +385,8 @@ class ResultStream<S, F> {
   /// decides. A restart drops the failure and everything after it, so
   /// [Mallard.onStreamFailure] never sees them. Giving up emits the failure
   /// and resumes the source. Without `hideFailure`, the failure is emitted
-  /// straight away and events keep flowing while `onFailure` decides.
+  /// straight away and events keep flowing while `onFailure` decides. Either
+  /// way, every restart is reported to [Mallard.onStreamRestart].
   ///
   /// One decision runs at a time. Failures that arrive meanwhile don't ask
   /// again: with `hideFailure` they are held and dropped on a restart, and
@@ -533,6 +534,16 @@ class _Restarter<S, F> {
     listen(rebuild);
   }
 
+  // A callback that throws gives an untyped error.
+  void _report(Object? failure, Object? exception, StackTrace? stackTrace) {
+    if (!_session.isActive) return;
+    try {
+      reportRestart(failure, exception, stackTrace, _attempt);
+    } on Object catch (e, s) {
+      _session.addError(e, s);
+    }
+  }
+
   // A callback that throws gives an untyped error and counts as false.
   Future<bool> _ask(FutureOr<bool> Function() callback) async {
     try {
@@ -577,6 +588,7 @@ class _Restarter<S, F> {
       final lane = _lane;
       _lane = null;
       await lane?.cancel();
+      _report(failure.value, failure.exception, failure.stackTrace);
       _restart();
       return;
     }
@@ -611,6 +623,7 @@ class _Restarter<S, F> {
     final again = await _ask(() => onClose(_attempt));
 
     if (again) {
+      _report(null, null, null);
       _restart();
     } else {
       _session.close();

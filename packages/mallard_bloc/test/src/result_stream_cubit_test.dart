@@ -28,6 +28,7 @@ void main() {
     setUp(() {
       Mallard.onStreamSuccess = (_) {};
       Mallard.onStreamFailure = (_, _, _) {};
+      Mallard.onStreamRestart = (_, _, _, _) {};
       cubit = _StreamCubit();
       states = [];
       cubit.stream.listen(states.add);

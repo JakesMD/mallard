@@ -2,7 +2,7 @@
 
 ### Issue tracker
 
-Issues are tracked in GitHub Issues (`JakesMD/mallard`) via the `gh` CLI. Wayfinder tickets are always folded into the spec ticket. See `docs/agents/issue-tracker.md`.
+Issues are tracked locally as markdown under `.scratch/` (gitignored, never GitHub Issues). See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 

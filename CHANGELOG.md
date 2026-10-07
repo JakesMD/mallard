@@ -1,3 +1,7 @@
+## 2.1.0 - 07 Oct 2026
+
+- ✨ Added `Mallard.onStreamRestart`.
+
 ## 2.0.0 - 07 Oct 2026
 
 - 💥 **Breaking:** `Result` is now `sealed`, and `Success` and `Failure` are

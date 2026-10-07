@@ -13,6 +13,7 @@ void main() {
       Mallard.onTaskFailure = (_, _, _) {};
       Mallard.onStreamSuccess = (_) {};
       Mallard.onStreamFailure = (_, _, _) {};
+      Mallard.onStreamRestart = (_, _, _, _) {};
     });
 
     group('ResultStream.run', () {
@@ -2701,6 +2702,184 @@ void main() {
               .run()
               .asyncMap((r) => Task<int, String>.succeed(r.asSuccess + 1).run())
               .drain<void>();
+
+          expect(taskSuccesses, [2]);
+        }),
+      );
+    });
+
+    group('restart callback', () {
+      // A source that fails on its first [failures] runs, then succeeds.
+      late int runs;
+      ResultStream<int, String> failingFirst(int failures) => ResultStream(() {
+        runs++;
+        return Stream.value(
+          runs <= failures
+              ? Failure('x$runs', 'ex', fakeStack)
+              : const Success(1),
+        );
+      });
+
+      late List<List<Object?>> restarts;
+
+      setUp(() {
+        runs = 0;
+        restarts = [];
+        Mallard.onStreamRestart = (f, e, s, attempt) =>
+            restarts.add([f, e, s, attempt]);
+      });
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure that hides failures',
+          whenever: 'the source fails twice, then succeeds',
+          then: 'each restart is reported with its failure and attempt',
+        ),
+        procedure(() async {
+          await failingFirst(
+            2,
+          ).restartWhen(onFailure: (_, _) => true).run().drain<void>();
+
+          expect(restarts, [
+            ['x1', 'ex', fakeStack, 0],
+            ['x2', 'ex', fakeStack, 1],
+          ]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure that shows failures',
+          whenever: 'the source fails, then succeeds',
+          then: 'the restart is reported as well as the failure',
+        ),
+        procedure(() async {
+          final failures = <dynamic>[];
+          Mallard.onStreamFailure = (f, _, _) => failures.add(f);
+
+          await failingFirst(1)
+              .restartWhen(onFailure: (_, _) => true, hideFailure: false)
+              .run()
+              .drain<void>();
+
+          expect(failures, ['x1']);
+          expect(restarts, [
+            ['x1', 'ex', fakeStack, 0],
+          ]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on close',
+          whenever: 'the source closes twice before giving up',
+          then: 'each restart is reported with nulls and its attempt',
+        ),
+        procedure(() async {
+          await ResultStream<int, String>.fromResults(
+            const [],
+          ).restartWhen(onClose: (attempt) => attempt < 2).run().drain<void>();
+
+          expect(restarts, [
+            [null, null, null, 0],
+            [null, null, null, 1],
+          ]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure',
+          whenever: 'onFailure gives up',
+          then: 'nothing is reported',
+        ),
+        procedure(() async {
+          await failingFirst(
+            1,
+          ).restartWhen(onFailure: (_, _) => false).run().drain<void>();
+
+          expect(restarts, isEmpty);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a restarting stream inside chainStream',
+          whenever: 'the inner stream restarts',
+          then: 'the restart is reported although it is an inner run',
+        ),
+        procedure(() async {
+          await ResultStream<int, String>.succeed(0)
+              .chainStream(
+                (_) => failingFirst(1).restartWhen(onFailure: (_, _) => true),
+              )
+              .run()
+              .drain<void>();
+
+          expect(restarts, [
+            ['x1', 'ex', fakeStack, 0],
+          ]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a restart callback that throws',
+          whenever: 'the stream restarts',
+          then: 'the error is emitted and the restart still happens',
+        ),
+        procedure(() async {
+          Mallard.onStreamRestart = (_, _, _, _) =>
+              throw StateError('callback');
+
+          await expectLater(
+            failingFirst(1).restartWhen(onFailure: (_, _) => true).run(),
+            emitsInOrder([
+              emitsError(isA<StateError>()),
+              const Success<int, String>(1),
+              emitsDone,
+            ]),
+          );
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a listener that cancels while onFailure decides',
+          whenever: 'onFailure then returns true',
+          then: 'nothing is reported',
+        ),
+        procedure(() async {
+          final decided = Completer<bool>();
+          final sub = failingFirst(
+            1,
+          ).restartWhen(onFailure: (_, _) => decided.future).run().listen(null);
+          await pumpEventQueue();
+          await sub.cancel();
+          decided.complete(true);
+          await pumpEventQueue();
+
+          expect(restarts, isEmpty);
+          expect(runs, 1);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a restart callback that runs a task',
+          whenever: 'the stream restarts',
+          then: 'the task callback fires, as the callback is outside the run',
+        ),
+        procedure(() async {
+          final taskSuccesses = <dynamic>[];
+          Mallard.onTaskSuccess = taskSuccesses.add;
+          Mallard.onStreamRestart = (_, _, _, _) =>
+              unawaited(Future.value(Task<int, String>.succeed(2).run()));
+
+          await failingFirst(
+            1,
+          ).restartWhen(onFailure: (_, _) => true).run().drain<void>();
+          await pumpEventQueue();
 
           expect(taskSuccesses, [2]);
         }),

@@ -82,6 +82,20 @@ Stream<Result<S, F>> runStream<S, F>(Stream<Result<S, F>> Function() build) {
   );
 }
 
+/// Reports a restart to [Mallard.onStreamRestart], even in an inner run.
+///
+/// Hidden from the public export.
+void reportRestart(
+  Object? failure,
+  Object? exception,
+  StackTrace? stackTrace,
+  int attempt,
+) => Zone.current
+    .fork(zoneValues: {_inRun: false})
+    .run(
+      () => Mallard.onStreamRestart(failure, exception, stackTrace, attempt),
+    );
+
 /// Calls [build], turning a throw into a stream that emits it and closes.
 Stream<Result<S, F>> _build<S, F>(Stream<Result<S, F>> Function() build) {
   try {
