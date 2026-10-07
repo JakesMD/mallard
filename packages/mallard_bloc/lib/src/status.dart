@@ -1,11 +1,11 @@
 import 'package:mallard_bloc/mallard_bloc.dart';
 
-/// The status of the [TaskBlocState].
+/// The status of a [TaskBlocState].
 enum TaskBlocStatus {
   /// No request has been made yet.
   initial,
 
-  /// The request is currently in progress.
+  /// A request is running.
   inProgress,
 
   /// The request failed.

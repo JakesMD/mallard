@@ -24,206 +24,393 @@ Mallard treats your logic like a railway track. Instead of code "jumping" out of
 flow when an error occurs (via `throw`), it switches to a failure track. Errors
 become **data** you handle explicitly and type-safely.
 
+```dart
+enum WeatherError { offline, cityNotFound, badResponse }
+
+Task<Forecast, WeatherError> fetchForecast(String city) => Task.attempt(
+  run: () => weatherApi.forecast(city),
+  handle: (e) => e is SocketException
+      ? WeatherError.offline
+      : WeatherError.badResponse,
+);
+
+final result = await fetchForecast('London').run();
+
+final message = result.resolve(
+  onSuccess: (forecast) => 'Tomorrow: ${forecast.high}°C',
+  onFailure: (error) => switch (error) {
+    .offline => 'You are offline.',
+    .cityNotFound => 'No such city.',
+    .badResponse => 'Something went wrong.',
+  },
+);
+```
+
 ## Usage
 
 ### Results
 
-`Result<S, F>` represents either success or failure. Instead of throwing
-exceptions, operations return a `Result` so errors become data you handle
-explicitly and type-safely.
+`Result<S, F>` is either a `Success` holding an `S` or a `Failure` holding an
+`F`.
 
 **Creating a result:**
 
 ```dart
-const result = Success({'version': '1.0.0'});
-const result = Failure(ParseError.invalidJson);
+Result<double, WeatherError> parseCelsius(String raw) {
+  final celsius = double.tryParse(raw);
+  if (celsius == null) return const Failure(WeatherError.badResponse);
+  return Success(celsius);
+}
 ```
 
 **Working with a result:**
 
 ```dart
-// Get a single value from success or failure
-final message = result.resolve(
-  onSuccess: (settings) => 'Loaded version ${settings['version']}',
-  onFailure: (error) => 'Error: ${error.name}',
+final result = parseCelsius('21.5');
+
+// Resolve both tracks into a single value
+final label = result.resolve(
+  onSuccess: (celsius) => '$celsius°C',
+  onFailure: (error) => 'Unavailable: ${error.name}',
 );
 
 final newResult = result
 
-  // Transform success value to a different type
-  .convert((settings) => settings['version'])
-
-  // Transform the failure value
-  .convertFailure((error) => 'Parse Error: ${error.name}')
-
-  // Transform both success and failure types
-  .convertBoth(
-    onSuccess: (settings) => 'Settings ${settings.length} fields',
-    onFailure: (error) => 'Failed: ${error.name}',
-  )
-
-  // Validate success value, fail if check returns false
+  // Fail if the check returns false
   .ensure(
-    check: (settings) => settings.containsKey('version'),
-    otherwise: (settings) => ParseError.missingField,  // Create failure from success value
+    check: (celsius) => celsius > -90,
+    otherwise: (celsius) => WeatherError.badResponse,
   )
 
   // Recover from specific failures
   .recoverWhen(
-    check: (error) => error == ParseError.notFound,
-    then: (error) => {'version': '1.0.0'},  // Return success value
+    check: (error) => error == WeatherError.offline,
+    then: (error) => lastKnownCelsius,
+  )
+
+  // Transform the success value
+  .convert((celsius) => celsius * 9 / 5 + 32)
+
+  // Transform the failure value
+  .convertFailure((error) => 'Weather error: ${error.name}')
+
+  // Transform both at once
+  .convertBoth(
+    onSuccess: (fahrenheit) => '$fahrenheit°F',
+    onFailure: (message) => message.toUpperCase(),
   );
 
-// Check the state
-if (result.succeeded) print('Success: ${result.asSuccess}');
-if (result.failed) print('Error: ${result.asFailure}');
+// Check the track
+if (result.succeeded) print(result.asSuccess);
+if (result.failed) print(result.asFailure);
+
+// A failure caught from a throw keeps its exception and stack trace,
+// through every operator
+if (result case Failure(:final exception, :final stackTrace)) {
+  logger.error('Parsing failed', exception, stackTrace);
+}
 ```
 
 ### Tasks
 
-`Task` wraps synchronous and asynchronous operations and returns a `Result`.
-Exceptions are automatically captured as failures, letting you chain operations
-and handle outcomes type-safely.
+`Task<S, F>` wraps an operation that produces a `Result`. Nothing runs until
+`run()`, and every `run()` runs it again.
 
 **Creating a task:**
 
 ```dart
-// Task.attempt — Most common: automatically catches exceptions and converts them to failures
-Task<Map, ParseError> task = Task.attempt(
-  run: () async => jsonDecode(await File('settings.json').readAsString()) as Map,
-  handle: (e) => e is FileSystemException
-      ? ParseError.notFound
-      : ParseError.invalidJson,
+// Task.attempt: catches exceptions and turns them into failures
+Task<Forecast, WeatherError> fetchForecast(String city) => Task.attempt(
+  run: () => weatherApi.forecast(city),
+  handle: (e) => e is SocketException
+      ? WeatherError.offline
+      : WeatherError.badResponse,
 );
 
-// Task() — For fine-grained control: you handle try-catch and return a Result
-Task<Map, ParseError> task = Task(() async {
-  try {
-    final content = await File('settings.json').readAsString();
-    return Success(jsonDecode(content) as Map);
-  } on FileSystemException {
-    return Failure(ParseError.notFound);
-  } catch (e) {
-    return Failure(ParseError.invalidJson);
-  }
+// Task(): return the Result yourself. Nothing is caught.
+Task<String, WeatherError> savedCity = Task(() async {
+  final city = await storage.read('city');
+  if (city == null) return const Failure(WeatherError.cityNotFound);
+  return Success(city);
 });
 ```
 
 **Working with a task:**
 
 ```dart
-// Execute the task and get a Result
-final result = await task.run();
+// Run the task and get a Result
+final result = await savedCity.run();
 
-final newTask = task
+final newTask = savedCity
 
-  // Transform success value to a different type
-  .convert((settings) => settings['version'])
+  // Run another task if this one succeeds
+  .chain((city) => fetchForecast(city))
 
-  // Transform the failure value
-  .convertFailure((error) => 'Parse Error: ${error.name}')
+  // Run a function that returns a Result if this one succeeds
+  .then((forecast) async => validateForecast(forecast))
 
-  // Transform both success and failure types
-  .convertBoth(
-    onSuccess: (settings) => 'Settings ${settings.length} fields',
-    onFailure: (error) => 'Failed: ${error.name}',
+  // Run a function that may throw if this one succeeds, catching it as a failure
+  .thenAttempt(
+    run: (forecast) async {
+      await cache.write(forecast);
+      return forecast;
+    },
+    handle: (e) => WeatherError.badResponse,
   )
 
-  // Validate success value, fail if check returns false
+  // Fail if the check returns false
   .ensure(
-    check: (settings) => settings.containsKey('version'),
-    otherwise: (settings) => ParseError.missingField,  // Create failure from success value
+    check: (forecast) => forecast.days.isNotEmpty,
+    otherwise: (forecast) => WeatherError.badResponse,
   )
 
   // Recover from specific failures
   .recoverWhen(
-    check: (error) => error == ParseError.notFound,
-    then: (error) => {'version': '1.0.0'},  // Return success value
+    check: (error) => error == WeatherError.offline,
+    then: (error) => cachedForecast,
   )
 
-  // Chain another task if this task succeeds
-  .then((settings) async {
-    try {
-      final validated = await validateSettings(settings);
-      return Success(validated);
-    } catch (e) {
-      return Failure(ParseError.invalidJson);
-    }
-  })
+  // Transform the success value
+  .convert((forecast) => forecast.high)
 
-  // Chain another async function, capturing exceptions as failures
+  // Transform the failure value
+  .convertFailure((error) => 'Weather error: ${error.name}')
+
+  // Transform both at once
+  .convertBoth(
+    onSuccess: (high) => 'Tomorrow: $high°C',
+    onFailure: (message) => message.toUpperCase(),
+  )
+
+  // Transform the whole Result
+  .apply((result) => result.recoverWhen(
+    check: (message) => message.contains('OFFLINE'),
+    then: (message) => 'Showing cached weather',
+  ));
+```
+
+### ResultStreams
+
+`ResultStream<S, F>` is the sibling of `Task` that emits many results. `run()`
+returns a `Stream<Result<S, F>>`.
+
+**Creating a result stream:**
+
+```dart
+// ResultStream.attempt: wraps a plain stream, turning its errors into failures
+ResultStream<double, WeatherError> watchTemperature(String city) =>
+    ResultStream.attempt(
+      run: () => weatherSocket.temperatures(city),
+      handle: (e) => WeatherError.offline,
+    );
+
+// ResultStream.fromTask: emits the task's result, then closes
+ResultStream<Forecast, WeatherError> forecast = ResultStream.fromTask(
+  fetchForecast('London'),
+);
+
+// ResultStream(): your source already emits Results
+ResultStream<double, WeatherError> readings = ResultStream(() async* {
+  yield const Success(21.5);
+  yield const Failure(WeatherError.offline); // Failures don't end the stream
+  yield const Success(22.0);
+  // A throw here would end the stream with an untyped error, so yield a
+  // Failure instead
+});
+```
+
+**Running a result stream:**
+
+```dart
+// Each run() calls the factory again, so it must return a fresh or broadcast
+// stream
+watchTemperature('London').run().listen((result) {
+  print(result.resolve(
+    onSuccess: (celsius) => '$celsius°C',
+    onFailure: (error) => 'Lost signal: ${error.name}',
+  ));
+});
+```
+
+**Working with a result stream:**
+
+Every `Task` operator works here too, applied to each result as it arrives.
+
+```dart
+final newStream = watchTemperature('London')
+
+  // Transform each success value
+  .convert((celsius) => celsius * 9 / 5 + 32)
+
+  // A failure made here is data too and doesn't end the stream
+  .ensure(
+    check: (fahrenheit) => fahrenheit < 150,
+    otherwise: (fahrenheit) => WeatherError.badResponse,
+  )
+
+  // Async steps run one at a time and in order, pausing the source, like
+  // asyncMap. Failures skip the step but keep their place.
   .thenAttempt(
-    run: (settings) async => await saveSettings(settings),
-    handle: (e) => ParseError.invalidJson,
+    run: (fahrenheit) async {
+      await database.insertReading(fahrenheit);
+      return fahrenheit;
+    },
+    handle: (e) => WeatherError.badResponse,
   )
 
-  // Chain another task if this task succeeds
-  .chain((settings) => loadUserPreferences(settings['userId']))
+  // Apply any StreamTransformer, e.g. distinct, take or debounce
+  .transform(StreamTransformer.fromBind((results) => results.distinct()))
 
-  // Apply a function to transform the result
-  .apply((result) => result.convert((s) => s.toString()));
+  // Stop at the first failure: emit it, then close and cancel the source
+  .untilFailure();
+
+// If a callback you pass throws, that event becomes an untyped stream error
+// and later events keep flowing
+```
+
+**Switching streams:**
+
+```dart
+// chainStream only listens to the stream for the latest value
+ResultStream<double, WeatherError> temperature = watchSelectedCity()
+  .chainStream((city) => watchTemperature(city));
+
+// selected city: 'Paris'  → listens to Paris
+// selected city: 'Oslo'   → cancels Paris, listens to Oslo
+// selected city: Failure  → cancels Oslo, emits the failure
+
+// thenAttemptStream does the same with a plain stream
+ResultStream<double, WeatherError> temperature = watchSelectedCity()
+  .thenAttemptStream(
+    run: (city) => weatherSocket.temperatures(city),
+    handle: (e) => WeatherError.offline,
+  );
+
+// Tasks can start a stream too. If the task fails, its failure is emitted and
+// the stream closes.
+ResultStream<double, WeatherError> temperature = savedCity
+  .chainStream((city) => watchTemperature(city));
+```
+
+**Combining streams:**
+
+```dart
+// combineWith combines the latest success of each stream
+ResultStream<Conditions, WeatherError> conditions = watchTemperature(city)
+  .combineWith(watchHumidity(city), combine: Conditions.new);
+
+// temperature 21       → nothing yet, humidity hasn't emitted
+// humidity 60          → Conditions(21, 60)
+// temperature 22       → Conditions(22, 60)
+// temperature Failure  → Failure
+// humidity 65          → nothing, temperature's latest is a failure
+// temperature 23       → Conditions(23, 65)
+
+// combineWithTwo to combineWithFive take a record of other streams
+ResultStream<Dashboard, WeatherError> dashboard = watchTemperature(city)
+  .combineWithTwo(
+    (watchHumidity(city), watchWind(city)),
+    combine: (celsius, humidity, wind) => Dashboard(celsius, humidity, wind),
+  );
+
+// Combine inside chainStream to rebuild every stream when the city changes
+ResultStream<Dashboard, WeatherError> dashboard = watchSelectedCity()
+  .chainStream((city) => watchTemperature(city).combineWithTwo(
+    (watchHumidity(city), watchWind(city)),
+    combine: Dashboard.new,
+  ));
+```
+
+**Restarting a stream:**
+
+```dart
+ResultStream<double, WeatherError> temperature = watchTemperature(city)
+  .restartWhen(
+
+    // Asked on each failure. attempt counts the restarts since the last success.
+    onFailure: (error, attempt) async {
+      await Future.delayed(Duration(seconds: 1 << attempt)); // Back off
+      return attempt < 5; // true restarts, false emits the failure
+    },
+
+    // Asked when the source closes
+    onClose: (attempt) async {
+      await Future.delayed(const Duration(seconds: 1));
+      return true;
+    },
+
+    // The default: hide the failure while onFailure decides, and drop it on a
+    // restart. Pass false to emit it straight away.
+    hideFailure: true,
+  );
+
+// Restart each source rather than the combined stream, which would restart
+// them all
+final conditions = watchTemperature(city)
+  .restartWhen(onClose: (attempt) => true)
+  .combineWith(
+    watchHumidity(city).restartWhen(onClose: (attempt) => true),
+    combine: Conditions.new,
+  );
 ```
 
 ### Maybe
 
-`Maybe` represents a value that may or may not have been provided. Use `Present`
-for provided values and `Absent` for absent values. This is useful in functions
-like `copyWith` where you need to distinguish between "not provided" and
-"explicitly null".
-
-**Creating a maybe:**
+`Maybe` tells "not provided" apart from "provided as null", which is exactly
+what `copyWith` needs.
 
 ```dart
-const a = maybe(settings['theme']);
-const b = absent();
-const c = maybe(null);  // → Absent
+class Settings {
+  const Settings({this.city});
+
+  final String? city;
+
+  Settings copyWith({Maybe<String?> city = const Absent()}) => Settings(
+    city: city.resolve(onPresent: (city) => city, onAbsent: () => this.city),
+  );
+}
+
+settings.copyWith();                      // Keeps the city
+settings.copyWith(city: present('Oslo')); // Sets it
+settings.copyWith(city: present(null));   // Clears it
 ```
 
 **Working with a maybe:**
 
 ```dart
-const maybe = maybe(userTheme);
+final units = maybe(queryParameters['units']); // null → Absent
 
-// Handle both cases
-final theme = maybe.resolve(
-  onPresent: (value) => value,
-  onAbsent: () => 'light',
-);
-
-final newMaybe = maybe
+final newMaybe = units
 
   // Transform the value if present
-  .convert((theme) => theme.toUpperCase())
+  .convert((units) => units.toLowerCase())
 
-  // Keep the value only if condition is true, otherwise Absent
-  .filter((theme) => theme == 'light' || theme == 'dark');
+  // Keep the value only if the check passes, otherwise Absent
+  .filter((units) => units == 'metric' || units == 'imperial');
 
-// Check if present
-if (maybe.isPresent) print('Theme is set');
+// Handle both cases
+final label = units.resolve(
+  onPresent: (units) => units,
+  onAbsent: () => 'metric',
+);
 
-// Check if absent
-if (maybe.isAbsent) print('Theme uses default');
+if (units.isPresent) print('Units chosen');
+if (units.isAbsent) print('Using the default');
 
-// Get as nullable
-final theme = maybe.asNullable;
+final nullable = units.asNullable;
 ```
 
 ### Nothing
 
-`Nothing` represents a void return type. Use it for operations that perform an
-action without returning a value, like writing to a file or logging.
+`Nothing` is the success value of an operation that doesn't return anything.
 
 ```dart
-Task<Nothing, ParseError> saveSettings(Map settings) =>
-    Task.attempt(
-      run: () => File('settings.json').writeAsString(jsonEncode(settings)),
-      handle: (_) => ParseError.invalidJson,
-    );
-
-final result = await saveSettings({'version': '1.0.0'}).run();
-result.resolve(
-  onSuccess: (_) => print('Settings saved'),
-  onFailure: (error) => print('Save failed: ${error.name}'),
+Task<Nothing, WeatherError> saveCity(String city) => Task.attempt(
+  run: () async {
+    await storage.write('city', city);
+    return nothing;
+  },
+  handle: (e) => WeatherError.badResponse,
 );
 ```
 
@@ -233,70 +420,111 @@ result.resolve(
 
 ### Global Callbacks
 
-Set up app-wide handlers to observe all task execution. Useful for logging,
-analytics, debugging, and monitoring:
+Observe every task and result stream in one place, e.g. for logging or
+analytics:
 
 ```dart
 Mallard.onTaskSuccess = (value) {
-  analytics.track('task_success', value);
+  analytics.track('task_success');
 };
 
 Mallard.onTaskFailure = (failure, exception, stackTrace) {
-  logger.error('Task failed', exception, stackTrace);
+  logger.error('Task failed: $failure', exception, stackTrace);
 };
+
+// Same signatures, fired for each result a ResultStream emits
+Mallard.onStreamSuccess = (value) {};
+Mallard.onStreamFailure = (failure, exception, stackTrace) {};
+```
+
+Only the outermost run fires callbacks:
+
+```dart
+final shoutedCity = Task(() async {
+  final city = await savedCity.run(); // Inner run: no callback
+  return city.convert((city) => city.toUpperCase());
+});
+
+await shoutedCity.run(); // Fires onTaskSuccess once
+
+// The same goes for operators: chain, chainStream, combineWith and the rest
+// fire callbacks once per result of the outer run
+await savedCity.chain(fetchForecast).run(); // Fires onTaskSuccess once
 ```
 
 ### Custom Aliases
 
-Create your own type aliases to match your naming conventions using extension
-types.
-
-Mallard provides `short.dart` as an example:
+Create your own names with extension types. Mallard ships `short.dart` as an
+example:
 
 ```dart
 import 'package:mallard/short.dart';
 
 // Type aliases
-final ok = Res.ok({'version': '1.0.0'});
-final err = Res.err(ParseError.invalidJson);
+final ok = Res<double, WeatherError>.ok(21.5);
+final err = Res<double, WeatherError>.err(WeatherError.offline);
 
 // Parameter aliases
-result.resolve(
-  onOk: (settings) => 'Loaded ${settings.length} settings',
-  onErr: (error) => 'Error: ${error.name}',
+final label = ok.resolve(
+  onOk: (celsius) => '$celsius°C',
+  onErr: (error) => 'Unavailable: ${error.name}',
 );
 
 // Property aliases
-if (result.isOk) print(result.ok);
-```
+if (ok.isOk) print(ok.asOk);
+if (err.isErr) print(err.asErr);
 
-You can create your own extension types to customize type names, method names,
-and parameter names.
+// ResStream is the short ResultStream
+final temperature = ResStream<double, WeatherError>.fromResults([ok])
+  .convertErr((error) => error.name)   // convertFailure
+  .restartWhen(onErr: (error, attempt) => attempt < 3) // onFailure
+  .untilErr();                         // untilFailure
+```
 
 ---
 
 ## Testing
 
-Use `Task.succeed` and `Task.fail` to mock task results in your tests.
+Use `Task.succeed` and `Task.fail` to stub tasks:
 
 ```dart
-// Create a task that immediately succeeds (useful for testing)
-test('Example', () {
-  when(() => weatherClient.fetch(any()))
-    .thenReturn(Task.succeed(Temperature(celsius: 20)));
+test('shows tomorrow\'s high', () async {
+  when(() => weatherApi.fetchForecast(any()))
+    .thenReturn(Task.succeed(Forecast(high: 21)));
 
-  final result = await weatherRepository.fetch('London').run();
+  final result = await repository.fetchForecast('London').run();
 
-  expect(result.asSuccess.celsius, 20);
+  expect(result.asSuccess.high, 21);
 });
 
-// Create a task that immediately fails (useful for testing)
-test('Example', () {
-  when(() => weatherClient.fetch(any()))
-    .thenReturn(Task.fail(WeatherError.notFound));
+test('reports when offline', () async {
+  when(() => weatherApi.fetchForecast(any()))
+    .thenReturn(Task.fail(WeatherError.offline));
 
-  final result = await weatherRepository.fetch('London').run();
+  final result = await repository.fetchForecast('London').run();
 
-  expect(result.asFailure, WeatherError.notFound);
+  expect(result.asFailure, WeatherError.offline);
+});
+```
+
+`ResultStream.succeed`, `ResultStream.fail` and `ResultStream.fromResults` do
+the same for streams:
+
+```dart
+test('passes readings and failures through', () {
+  when(() => weatherApi.watchTemperature(any())).thenReturn(
+    ResultStream.fromResults([
+      const Success(20.0),
+      const Failure(WeatherError.offline),
+    ]),
+  );
+
+  expect(
+    repository.watchTemperature('London').run(),
+    emitsInOrder([
+      const Success<double, WeatherError>(20.0),
+      const Failure<double, WeatherError>(WeatherError.offline),
+    ]),
+  );
 });
 ```

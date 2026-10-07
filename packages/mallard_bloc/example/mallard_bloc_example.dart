@@ -6,7 +6,7 @@ import 'random_number_repository.dart';
 typedef RandomNumberFetchState = TaskBlocState<int, RandomNumberFetchException>;
 
 class RandomNumberFetchCubit extends Cubit<RandomNumberFetchState>
-    with TaskCubitMixin {
+    with TaskCubitMixin<int, RandomNumberFetchException> {
   RandomNumberFetchCubit(this.randomRepository) : super(.initial());
 
   final RandomRepository randomRepository;

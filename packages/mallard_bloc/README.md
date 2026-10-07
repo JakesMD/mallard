@@ -7,78 +7,110 @@
 </p>
 
 <p align="center">
-  Take advantage of <a href="https://pub.dev/packages/mallard">Mallard</a>'s railway oriented programming to radically simplify bloc applications.
+  Cubits driven by <a href="https://pub.dev/packages/mallard">Mallard</a> tasks and result streams, with no loading or error state to wire by hand.
 </p>
 
-> [!EXPERIMENTAL]
-> This is not yet production ready. But feel free to play around and suggest
+> [!WARNING]
+> Experimental: not yet production ready. Feel free to try it and suggest
 > improvements.
 
 ---
 
-## Usage
+## Overview
+
+| Piece                    | What it does                                                         |
+| ------------------------ | -------------------------------------------------------------------- |
+| `TaskBlocState<S, F>`    | A `status` (initial, in progress, succeeded, failed) and the latest `Result`. |
+| `TaskCubitMixin`         | Runs one `Task` at a time with `request`.                            |
+| `ResultStreamCubitMixin` | Follows a live `ResultStream` with `subscribe` and `unsubscribe`.    |
+
+Use one mixin per cubit.
+
+## Running a task
 
 ```dart
-// Define a your cubit state as a typedef.
-typedef RandomNumberFetchState = TaskBlocState<int, RandomNumberFetchException>;
+typedef ForecastState = TaskBlocState<Forecast, WeatherError>;
 
-// Create your cubit with the TaskCubitMixin.
-class RandomNumberFetchCubit extends Cubit<RandomNumberFetchState>
-    with TaskCubitMixin {
-  RandomNumberFetchCubit(this.randomRepository) : super(.initial());
+class ForecastCubit extends Cubit<ForecastState>
+    with TaskCubitMixin<Forecast, WeatherError> {
+  ForecastCubit(this.repository) : super(.initial());
 
-  final RandomRepository randomRepository;
+  final WeatherRepository repository;
 
-  // Make a request call and pass in your job. Everything else is handled for you.
-  Future<void> fetchRandomNumber() =>
-      request(randomRepository.fetchRandomNumber());
+  Future<void> fetch(String city) => request(repository.fetchForecast(city));
 }
+```
 
-// ...
+`request` emits in progress, then a completed state for the result. It does
+nothing while a request is already in progress. If the task throws, the error
+goes to `addError` and the state from before the request comes back.
 
-// Update your UI based on the current request state.
-BlocBuilder<RandomNumberFetchCubit, RandomNumberFetchState>(
-    builder: (context, state) => switch (state.status) {
-        .initial => const Text('Generate a random number!'),
-        .inProgress => const CircularProgressIndicator(),
-        .succeeded => Text('${state.success}'),
-        .failed => Text(
-          switch (state.failure!) {
-            .unknown => 'Unknown error occurred.',
-            .overflow => 'Error: Overflowed',
-          },
-        ),
-    },
+Build the UI from the status:
+
+```dart
+BlocBuilder<ForecastCubit, ForecastState>(
+  builder: (context, state) => switch (state.status) {
+    .initial => const Text('Pick a city.'),
+    .inProgress => const CircularProgressIndicator(),
+    .succeeded => Text('Tomorrow: ${state.success!.high}°C'),
+    .failed => Text(switch (state.failure!) {
+      .offline => 'You are offline.',
+      .cityNotFound => 'No such city.',
+      .badResponse => 'The weather service misbehaved.',
+    }),
+  },
 ),
 ```
 
-### For more flexibility
+## Following a stream
 
 ```dart
-// Extend TaskBlocState instead of using typedef.
-class RandomNumberFetchState
-    extends TaskBlocState<int, RandomNumberFetchException> {
-  RandomNumberFetchState.initial() : super.initial();
+typedef TemperatureState = TaskBlocState<double, WeatherError>;
 
-  RandomNumberFetchState.inProgress() : super.inProgress();
+class TemperatureCubit extends Cubit<TemperatureState>
+    with ResultStreamCubitMixin<double, WeatherError> {
+  TemperatureCubit(this.repository) : super(.initial());
 
-  RandomNumberFetchState.completed(super.result) : super.completed();
+  final WeatherRepository repository;
+
+  // Calling this again switches to the new city's stream.
+  void watch(String city) => subscribe(repository.watchTemperature(city));
+
+  Future<void> stopWatching() => unsubscribe();
+}
+```
+
+- Each result emits a completed state. The state is in progress, keeping the
+  previous result, until the first one arrives.
+- If the stream closes, errors or is unsubscribed before its first result, the
+  state from before `subscribe` comes back. After that, the last state stays.
+- Untyped stream errors go to `addError`, and the subscription stays live.
+- Closing the cubit cancels the subscription.
+
+## Without the mixins
+
+Extend `TaskBlocState` instead of using a typedef, and emit the states
+yourself:
+
+```dart
+class ForecastState extends TaskBlocState<Forecast, WeatherError> {
+  ForecastState.initial() : super.initial();
+
+  ForecastState.inProgress() : super.inProgress();
+
+  ForecastState.completed(super.result) : super.completed();
 }
 
-class RandomNumberFetchCubit extends Cubit<RandomNumberFetchState> {
-  RandomNumberFetchCubit(this.randomRepository) : super(.initial());
+class ForecastCubit extends Cubit<ForecastState> {
+  ForecastCubit(this.repository) : super(.initial());
 
-  final RandomRepository randomRepository;
+  final WeatherRepository repository;
 
-  // Emit the state changes manually.
-  Future<void> fetchRandomNumber() async {
+  Future<void> fetch(String city) async {
     if (state.isInProgress) return;
 
     emit(.inProgress());
-
-    final result = await randomRepository.fetchRandomNumber().run();
-
-    emit(.completed(result));
+    emit(.completed(await repository.fetchForecast(city).run()));
   }
 }
 ```

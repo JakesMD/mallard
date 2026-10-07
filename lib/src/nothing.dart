@@ -1,9 +1,7 @@
 /// {@template mallard.nothing}
 ///
-/// A class representing the absence of a value.
-///
-/// This is useful when you need to return a value from a function that doesn't
-/// have a meaningful result.
+/// The success value of an operation that only has an effect, as in
+/// `Task<Nothing, F>`.
 ///
 /// {@endtemplate}
 final class Nothing {

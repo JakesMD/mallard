@@ -1,13 +1,35 @@
-/// The class that handles global Mallard configurations.
+import 'package:mallard/mallard.dart';
+
+/// Global callbacks that observe every [Task] and [ResultStream] outcome, for
+/// logging, analytics or crash reporting.
+///
+/// Only the outermost run reports. A run started while another task or result
+/// stream is running is an inner run and reports nothing itself, whether an
+/// operator or your own code started it, and whether or not it is awaited.
+/// The callbacks fire outside the run, so a run started from a callback is an
+/// outermost run.
 class Mallard {
-  /// The function called when a task succeeds.
+  /// Called with the value of each [Success] a task produces.
   static void Function(dynamic success) onTaskSuccess = (_) {};
 
-  /// The function called when a task fails.
+  /// Called with the value, exception and stack trace of each [Failure] a
+  /// task produces.
   static void Function(
     dynamic failure,
     Object? exception,
     StackTrace? stackTrace,
   )
   onTaskFailure = (_, _, _) {};
+
+  /// Called with the value of each [Success] a result stream emits.
+  static void Function(dynamic success) onStreamSuccess = (_) {};
+
+  /// Called with the value, exception and stack trace of each [Failure] a
+  /// result stream emits.
+  static void Function(
+    dynamic failure,
+    Object? exception,
+    StackTrace? stackTrace,
+  )
+  onStreamFailure = (_, _, _) {};
 }

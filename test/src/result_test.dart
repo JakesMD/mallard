@@ -1,4 +1,5 @@
 import 'package:mallard/mallard.dart';
+import 'package:mallard/src/result.dart' show RetypeFailure;
 import 'package:test/test.dart';
 import 'package:test_beautifier/test_beautifier.dart';
 
@@ -61,7 +62,9 @@ void main() {
         requirement(
           given: 'a failed result',
           whenever: 'the result is converted',
-          then: 'the failure function is called',
+          then:
+              'the failure function is called and the exception and stack '
+              'trace are kept',
         ),
         procedure(() {
           final result = Failure<int, String>('error', 1, fakeStack)
@@ -96,7 +99,8 @@ void main() {
           given: 'a failed result',
           whenever: 'the result is converted',
           then:
-              'the failure function is not called and the failure is unchanged',
+              'the failure function is not called and the failure keeps its '
+              'value, exception and stack trace',
         ),
         procedure(() {
           final result = Failure<int, String>(
@@ -131,7 +135,9 @@ void main() {
         requirement(
           given: 'a failed result',
           whenever: 'the result is converted',
-          then: 'the failure function is called',
+          then:
+              'the failure function is called and the exception and stack '
+              'trace are kept',
         ),
         procedure(() {
           final result = Failure<int, String>(
@@ -335,6 +341,23 @@ void main() {
       procedure(() {
         expect(const Failure<int, String>('error').value, 'error');
         expect(const Failure<int, String>('error').val, 'error');
+      }),
+    );
+
+    test(
+      requirement(
+        given: 'a failure with an exception and stack trace',
+        whenever: 'it is retyped',
+        then: 'it keeps its value, exception and stack trace',
+      ),
+      procedure(() {
+        final result = Failure<int, String>(
+          'error',
+          1,
+          fakeStack,
+        ).retype<bool>();
+
+        expect(result, Failure<bool, String>('error', 1, fakeStack));
       }),
     );
   });

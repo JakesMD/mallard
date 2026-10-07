@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:mallard/mallard.dart';
 import 'package:test/test.dart';
 import 'package:test_beautifier/test_beautifier.dart';
@@ -140,6 +142,94 @@ void main() {
           );
         }),
       );
+
+      test(
+        requirement(
+          given: 'a task composed with chain, then and apply',
+          whenever: 'the task is run',
+          then: 'the callback fires once with the final value, none for inners',
+        ),
+        procedure(() async {
+          final successes = <dynamic>[];
+          Mallard.onTaskSuccess = successes.add;
+
+          final task = Task<int, String>.succeed(1)
+              .chain((v) => Task.succeed(v + 1))
+              .then((v) => Success(v + 1))
+              .apply((r) => r.convert((v) => v + 1));
+
+          await task.run();
+
+          expect(successes, [4]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a task whose body runs another task',
+          whenever: 'the outer task is run',
+          then: 'the callback fires once with the outer value, none for inner',
+        ),
+        procedure(() async {
+          final successes = <dynamic>[];
+          Mallard.onTaskSuccess = successes.add;
+          final inner = Task<int, String>.succeed(1);
+
+          await Task<int, String>(
+            () async => (await inner.run()).convert((v) => v + 1),
+          ).run();
+
+          expect(successes, [2]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a task whose body starts another task without awaiting it',
+          whenever: 'the outer task is run',
+          then: 'the callback fires for the outer task only',
+        ),
+        procedure(() async {
+          final successes = <dynamic>[];
+          Mallard.onTaskSuccess = successes.add;
+          final inner = Completer<void>();
+
+          await Task<int, String>(() {
+            unawaited(
+              Future.sync(
+                Task<int, String>.succeed(1).run,
+              ).then((_) => inner.complete()),
+            );
+            return const Success(2);
+          }).run();
+          await inner.future;
+
+          expect(successes, [2]);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a failure callback that runs another task',
+          whenever: 'a failing task is run',
+          then: 'the task started by the callback fires its own callback',
+        ),
+        procedure(() async {
+          final successes = <dynamic>[];
+          final logged = Completer<void>();
+          Mallard.onTaskSuccess = successes.add;
+          Mallard.onTaskFailure = (_, _, _) => unawaited(
+            Future.sync(
+              Task<int, String>.succeed(1).run,
+            ).then((_) => logged.complete()),
+          );
+
+          await Task<int, String>.fail('x').run();
+          await logged.future;
+
+          expect(successes, [1]);
+        }),
+      );
     });
 
     group('apply', () {
@@ -188,13 +278,11 @@ void main() {
         procedure(() async {
           final task = Task<int, String>.fail(
             'error',
-            'error',
-            fakeStack,
           ).then((x) async => const Success('1'));
 
           final result = await task.run();
 
-          expect(result, Failure<String, String>('error', 'error', fakeStack));
+          expect(result, const Failure<String, String>('error'));
         }),
       );
     });
@@ -249,13 +337,11 @@ void main() {
         procedure(() async {
           final task = Task<int, String>.fail(
             'error',
-            'error',
-            fakeStack,
           ).thenAttempt(run: (s) async => '1', handle: (e) => 'handled error');
 
           final result = await task.run();
 
-          expect(result, Failure<String, String>('error', 'error', fakeStack));
+          expect(result, const Failure<String, String>('error'));
         }),
       );
     });
@@ -284,13 +370,13 @@ void main() {
           then: 'the result is a failed task with the transformed failure',
         ),
         procedure(() async {
-          final task = Task<int, String>.succeed(1).chain(
-            (x) => Task<String, String>.fail('error', 'error', fakeStack),
-          );
+          final task = Task<int, String>.succeed(
+            1,
+          ).chain((x) => Task<String, String>.fail('error'));
 
           final result = await task.run();
 
-          expect(result, Failure<String, String>('error', 'error', fakeStack));
+          expect(result, const Failure<String, String>('error'));
         }),
       );
 
@@ -303,13 +389,11 @@ void main() {
         procedure(() async {
           final task = Task<int, String>.fail(
             'error',
-            'error',
-            fakeStack,
           ).chain((x) => Task<String, String>.succeed('1'));
 
           final result = await task.run();
 
-          expect(result, Failure<String, String>('error', 'error', fakeStack));
+          expect(result, const Failure<String, String>('error'));
         }),
       );
     });
@@ -340,18 +424,14 @@ void main() {
           then: 'the result is a failed task with the transformed failure',
         ),
         procedure(() async {
-          final task = Task<Never, String>.fail('error', 'error', fakeStack)
-              .convertBoth(
-                onSuccess: (s) => fail('Should not be called'),
-                onFailure: (f) => 'handled error',
-              );
+          final task = Task<Never, String>.fail('error').convertBoth(
+            onSuccess: (s) => fail('Should not be called'),
+            onFailure: (f) => 'handled error',
+          );
 
           final result = await task.run();
 
-          expect(
-            result,
-            Failure<Never, String>('handled error', 'error', fakeStack),
-          );
+          expect(result, const Failure<Never, String>('handled error'));
         }),
       );
     });
@@ -379,15 +459,11 @@ void main() {
           then: 'the result is a failed task with the original failure',
         ),
         procedure(() async {
-          final task = Task<String, String>.fail(
-            'error',
-            'error',
-            fakeStack,
-          ).convert((s) => '1');
+          final task = Task<String, String>.fail('error').convert((s) => '1');
 
           final result = await task.run();
 
-          expect(result, Failure<String, String>('error', 'error', fakeStack));
+          expect(result, const Failure<String, String>('error'));
         }),
       );
     });
@@ -419,16 +495,11 @@ void main() {
         procedure(() async {
           final task = Task<String, String>.fail(
             'error',
-            'error',
-            fakeStack,
           ).convertFailure((f) => 'handled error');
 
           final result = await task.run();
 
-          expect(
-            result,
-            Failure<String, String>('handled error', 'error', fakeStack),
-          );
+          expect(result, const Failure<String, String>('handled error'));
         }),
       );
     });
@@ -445,8 +516,6 @@ void main() {
         procedure(() async {
           final task = Task<String, String>.fail(
             'error',
-            'error',
-            fakeStack,
           ).recoverWhen(check: (f) => f == 'error', then: (f) => 'recovered');
 
           final result = await task.run();
@@ -464,15 +533,14 @@ void main() {
           then: 'the result is a failed task with the original failure',
         ),
         procedure(() async {
-          final task = Task<Never, String>.fail('error', 'error', fakeStack)
-              .recoverWhen(
-                check: (f) => f == 'other error',
-                then: (f) => fail('Should not be called'),
-              );
+          final task = Task<Never, String>.fail('error').recoverWhen(
+            check: (f) => f == 'other error',
+            then: (f) => fail('Should not be called'),
+          );
 
           final result = await task.run();
 
-          expect(result, Failure<Never, String>('error', 'error', fakeStack));
+          expect(result, const Failure<Never, String>('error'));
         }),
       );
     });

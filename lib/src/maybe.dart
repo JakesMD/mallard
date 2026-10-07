@@ -1,63 +1,57 @@
 import 'package:equatable/equatable.dart';
 
-/// {@template mallard.maybe}
+/// A value that is [Present] or [Absent].
 ///
-/// Represents a value that may be present or absent.
-///
-/// {@endtemplate}
+/// Unlike a nullable, it tells "not provided" apart from "provided as null",
+/// which is what a `copyWith` parameter needs.
 sealed class Maybe<T> {
   const Maybe();
 
-  /// Creates a [Maybe] from a nullable value.
-  ///
-  /// If the value is `null`, an [Absent] instance is returned. Otherwise, a
-  /// [Present] instance containing the value is returned.
+  /// Returns [Absent] for null, otherwise [Present].
   static Maybe<T> from<T>(T? value) =>
       value == null ? const Absent() : Present(value);
 
-  /// Resolves the [Maybe] into a single type.
-  ///
-  /// Returns the result of [onPresent] if the value is present, otherwise
-  /// returns the result of [onAbsent].
+  /// Folds both cases into one value: [onPresent] maps a present value, and
+  /// [onAbsent] stands in for a missing one.
   T2 resolve<T2>({
     required T2 Function(T value) onPresent,
     required T2 Function() onAbsent,
   }) => isPresent ? onPresent((this as Present<T>).value) : onAbsent();
 
-  /// Changes the value if it is present, otherwise returns an [Absent].
+  /// Maps the value with [converter], if present.
   Maybe<T2> convert<T2>(T2 Function(T value) converter) => isPresent
       ? Present(converter((this as Present<T>).value))
       : const Absent();
 
-  /// Returns the [Maybe] if the value is present and satisfies the [predicate],
-  /// otherwise returns an [Absent].
+  /// Keeps the value only if it passes [predicate], otherwise returns
+  /// [Absent].
   Maybe<T> filter(bool Function(T value) predicate) => isPresent
       ? predicate((this as Present<T>).value)
             ? this
             : const Absent()
       : this;
 
-  /// Returns 'true' if the value is present, otherwise 'false'.
+  /// Whether this is [Present].
   bool get isPresent => this is Present<T>;
 
-  /// Returns 'true' if the value is absent, otherwise 'false'.
+  /// Whether this is [Absent].
   bool get isAbsent => this is Absent<T>;
 
-  /// Returns the value if it is present, otherwise `null`.
+  /// The value if present, otherwise null.
   T? get asNullable =>
       resolve(onPresent: (value) => value, onAbsent: () => null);
 }
 
 /// {@template mallard.present}
 ///
-/// Represents a present value.
+/// A [Maybe] holding a value, which may itself be null.
 ///
 /// {@endtemplate}
 final class Present<T> extends Maybe<T> with Equatable {
   /// {@macro mallard.present}
   const Present(this.value);
 
-  /// The value being represented.
+  /// The value.
   final T value;
 
   @override
@@ -66,7 +60,7 @@ final class Present<T> extends Maybe<T> with Equatable {
 
 /// {@template mallard.absent}
 ///
-/// Represents an absent value.
+/// A [Maybe] without a value.
 ///
 /// {@endtemplate}
 final class Absent<T> extends Maybe<T> {
@@ -74,16 +68,12 @@ final class Absent<T> extends Maybe<T> {
   const Absent();
 }
 
-/// Creates an instance of [Absent].
+/// Returns an [Absent].
 Maybe<T> absent<T>() => const Absent();
 
-/// Creates an instance of [Present] containing the provided [value].
+/// Returns a [Present] holding [value].
 Maybe<T> present<T>(T value) => Present(value);
 
-/// Creates a [Maybe] from a nullable value.
-///
-/// If the value is not `null`, a [Present] instance containing the value is
-/// returned. Otherwise, an [Absent] instance is returned.
-///
-/// {@macro mallard.maybe}
+/// Returns [Absent] for null, otherwise [Present]. Shorthand for
+/// [Maybe.from].
 Maybe<T> maybe<T>(T? value) => Maybe.from(value);
