@@ -377,35 +377,35 @@ class ResultStream<S, F> {
   ///
   /// `onFailure` is asked on each failure and `onClose` when the source
   /// closes. Give at least one; a trigger left out never restarts. `attempt`
-  /// counts the restarts since the last success. There is no built-in delay,
-  /// backoff or limit: `await` a delay in the callback and use `attempt` to
-  /// give up.
+  /// counts the restarts since the last success; use it to give up. `delay`
+  /// gives the wait before a restart from the same `attempt`, such as
+  /// `(attempt) => Duration(seconds: 1 << attempt)` to back off. Without it,
+  /// the source runs again straight away.
   ///
-  /// With `hideFailure` (the default), the source is paused while `onFailure`
-  /// decides. A restart drops the failure and everything after it, so
-  /// [Mallard.onStreamFailure] never sees them. Giving up emits the failure
-  /// and resumes the source. Without `hideFailure`, the failure is emitted
-  /// straight away and events keep flowing while `onFailure` decides. Either
-  /// way, every restart is reported to [Mallard.onStreamRestart].
+  /// A restart cancels the source at once and is reported to
+  /// [Mallard.onStreamRestart], then the delay is waited out. Nothing is
+  /// emitted meanwhile, and a listener cancelling ends the wait.
   ///
-  /// One decision runs at a time. Failures that arrive meanwhile don't ask
-  /// again: with `hideFailure` they are held and dropped on a restart, and
-  /// without it they are emitted. A close waits for the pending decision, then
-  /// asks `onClose` unless the stream restarted. A callback that throws emits
-  /// an untyped error and counts as false. If the factory throws on a restart,
-  /// the stream emits that error and closes. A restart while the listener is
-  /// paused runs the source paused. A listener cancelling never restarts, and
-  /// untyped stream errors pass through without asking.
+  /// With `hideFailure` (the default), a restart drops the failure, so
+  /// [Mallard.onStreamFailure] never sees it. Without it, the failure is
+  /// emitted before the restart. A failure that doesn't restart is emitted.
+  ///
+  /// A callback that throws, `delay` included, emits an untyped error and
+  /// counts as false. If the factory throws on a restart, the stream emits
+  /// that error and closes. A restart while the listener is paused runs the
+  /// source paused. A listener cancelling never restarts, and untyped stream
+  /// errors pass through without asking.
   ///
   /// A restart is invisible downstream. On a combined stream it reruns every
   /// source, so restart each source instead, before [combineWith] or inside
-  /// [chainStream]. An `onClose` that always returns true without a delay
+  /// [chainStream]. An `onClose` that always returns true without a `delay`
   /// restarts forever.
   ///
   /// {@endtemplate}
   ResultStream<S, F> restartWhen({
-    FutureOr<bool> Function(F failure, int attempt)? onFailure,
-    FutureOr<bool> Function(int attempt)? onClose,
+    bool Function(F failure, int attempt)? onFailure,
+    bool Function(int attempt)? onClose,
+    Duration Function(int attempt)? delay,
     bool hideFailure = true,
   }) {
     assert(
@@ -432,6 +432,7 @@ class ResultStream<S, F> {
           rebuild: () => current = _stream(),
           onFailure: onFailure,
           onClose: onClose,
+          delay: delay,
           hideFailure: hideFailure,
         ).listen(() => current),
       );
@@ -500,6 +501,7 @@ class _Restarter<S, F> {
     required this.rebuild,
     required this.onFailure,
     required this.onClose,
+    required this.delay,
     required this.hideFailure,
   });
 
@@ -507,14 +509,13 @@ class _Restarter<S, F> {
 
   /// Builds a new source and makes it the one a new listener listens to.
   final Stream<Result<S, F>> Function() rebuild;
-  final FutureOr<bool> Function(F failure, int attempt)? onFailure;
-  final FutureOr<bool> Function(int attempt)? onClose;
+  final bool Function(F failure, int attempt)? onFailure;
+  final bool Function(int attempt)? onClose;
+  final Duration Function(int attempt)? delay;
   final bool hideFailure;
 
   Lane? _lane;
   var _attempt = 0;
-  var _deciding = false;
-  var _closedWhileDeciding = false;
 
   void listen(Stream<Result<S, F>> Function() source) {
     _lane = _session.listen(
@@ -527,31 +528,40 @@ class _Restarter<S, F> {
     );
   }
 
-  void _restart() {
-    _deciding = false;
-    _closedWhileDeciding = false;
-    _attempt++;
-    listen(rebuild);
-  }
-
-  // A callback that throws gives an untyped error.
-  void _report(Object? failure, Object? exception, StackTrace? stackTrace) {
-    if (!_session.isActive) return;
+  // Asks [restart], then [delay]. Gives the wait before the restart, or null
+  // to carry on. A callback that throws gives an untyped error and null.
+  Duration? _decide(bool Function() restart) {
     try {
-      reportRestart(failure, exception, stackTrace, _attempt);
+      if (!restart()) return null;
+      return delay?.call(_attempt) ?? Duration.zero;
     } on Object catch (e, s) {
       _session.addError(e, s);
+      return null;
     }
   }
 
-  // A callback that throws gives an untyped error and counts as false.
-  Future<bool> _ask(FutureOr<bool> Function() callback) async {
+  // Cancels the source and reports the restart, then runs the source again
+  // once [wait] has passed. A report callback that throws gives an untyped
+  // error.
+  void _restart(Duration wait, [Failure<S, F>? failure]) {
+    unawaited(_lane?.cancel());
+    _lane = null;
+
     try {
-      return await callback();
+      reportRestart(
+        failure?.value,
+        failure?.exception,
+        failure?.stackTrace,
+        _attempt,
+      );
     } on Object catch (e, s) {
       _session.addError(e, s);
-      return false;
     }
+
+    _session.wait(wait, () {
+      _attempt++;
+      listen(rebuild);
+    });
   }
 
   void _onData(Result<S, F> r) {
@@ -563,70 +573,24 @@ class _Restarter<S, F> {
       return;
     }
 
-    if (onFailure == null || _deciding) {
-      _session.add(r);
-      return;
-    }
+    final wait = onFailure == null
+        ? null
+        : _decide(() => onFailure(r.value, _attempt));
 
-    _deciding = true;
-    if (hideFailure) {
-      // Holds the failure and everything after it until the decision.
-      _lane!.hold();
-    } else {
-      _session.add(r);
-    }
-    unawaited(_decideFailure(r, onFailure));
-  }
-
-  Future<void> _decideFailure(
-    Failure<S, F> failure,
-    FutureOr<bool> Function(F failure, int attempt) onFailure,
-  ) async {
-    final again = await _ask(() => onFailure(failure.value, _attempt));
-
-    if (again) {
-      final lane = _lane;
-      _lane = null;
-      await lane?.cancel();
-      _report(failure.value, failure.exception, failure.stackTrace);
-      _restart();
-      return;
-    }
-
-    _deciding = false;
-    if (hideFailure) {
-      _session.add(failure);
-      _lane!.release();
-    }
-    if (_closedWhileDeciding) {
-      _closedWhileDeciding = false;
-      _onDone();
-    }
+    if (wait == null || !hideFailure) _session.add(r);
+    if (wait != null) _restart(wait, r);
   }
 
   void _onDone() {
     final onClose = this.onClose;
+    if (!_session.isActive) return;
 
-    if (_deciding) {
-      _closedWhileDeciding = true;
-    } else if (onClose == null) {
+    final wait = onClose == null ? null : _decide(() => onClose(_attempt));
+
+    if (wait == null) {
       _session.close();
-    } else if (_session.isActive) {
-      unawaited(_decideClose(onClose));
-    }
-  }
-
-  Future<void> _decideClose(
-    FutureOr<bool> Function(int attempt) onClose,
-  ) async {
-    _deciding = true;
-    final again = await _ask(() => onClose(_attempt));
-
-    if (again) {
-      _report(null, null, null);
-      _restart();
     } else {
-      _session.close();
+      _restart(wait);
     }
   }
 }

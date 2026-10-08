@@ -28,6 +28,14 @@ _Avoid_: TaskStream, result flow, stream of tasks
 Any run of a Task or ResultStream started while another run is in progress, whether by an operator or by user code, and whether or not its Result is awaited. Only the outermost run reports its Results to the global callbacks; an inner run reports nothing itself. The global callbacks fire outside any run, so a run they start is an outermost run.
 _Avoid_: nested run, sub-run, silent run
 
+**Request**:
+A run of a Task, or a subscription to a ResultStream, made on behalf of a consumer such as a UI that tracks its progress. While a Request is pending, starting another run of the same Task is ignored, and subscribing to a new ResultStream replaces the live one. If a Request ends before it produces a Result, the Request state from before it comes back.
+_Avoid_: call, job, mutation
+
+**Request state**:
+Where a Request stands: idle (none made yet), pending (waiting for its first Result, keeping the previous one), succeeded, or failed.
+_Avoid_: status, bloc state, task state
+
 **Restart**:
-Re-running a ResultStream's source after it emits a Failure or closes, while the listener stays subscribed. A listener cancelling is never followed by a Restart.
+Re-running a ResultStream's source after it emits a Failure or closes, while the listener stays subscribed. A Restart can wait out a delay first; a listener cancelling ends the wait, and is never followed by a Restart. Every Restart is reported when it is decided, even in an inner run.
 _Avoid_: retry, repeat, resubscribe

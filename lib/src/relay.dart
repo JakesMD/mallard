@@ -46,6 +46,7 @@ final class RelaySession<T> {
 
   final StreamController<T> _controller;
   final _lanes = <Lane>{};
+  final _timers = <Timer>{};
   var _active = true;
 
   /// Whether the session still reaches the output.
@@ -107,6 +108,18 @@ final class RelaySession<T> {
     return lane;
   }
 
+  /// Calls [callback] after [duration], unless the session ends first.
+  void wait(Duration duration, void Function() callback) {
+    if (!_active) return;
+
+    late final Timer timer;
+    timer = Timer(duration, () {
+      _timers.remove(timer);
+      callback();
+    });
+    _timers.add(timer);
+  }
+
   void _pause() {
     for (final lane in _lanes) {
       lane._sub.pause();
@@ -121,6 +134,10 @@ final class RelaySession<T> {
 
   Future<void> _cancel() async {
     _active = false;
+    for (final timer in _timers) {
+      timer.cancel();
+    }
+    _timers.clear();
     final lanes = [..._lanes];
     _lanes.clear();
     await Future.wait(lanes.map((lane) => lane._sub.cancel()));
@@ -134,14 +151,6 @@ final class Lane {
   final RelaySession<Object?> _session;
 
   late final StreamSubscription<Object?> _sub;
-
-  /// Holds the source, independently of the listener's pause.
-  ///
-  /// Holds are counted, so each needs its own [release].
-  void hold() => _sub.pause();
-
-  /// Releases one [hold].
-  void release() => _sub.resume();
 
   /// Stops the source. Its `onDone` never fires.
   Future<void> cancel() {

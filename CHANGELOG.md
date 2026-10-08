@@ -1,3 +1,8 @@
+## 3.0.0 - 08 Oct 2026
+
+- 💥 **Breaking:** `restartWhen` callbacks now return `bool`.
+- ✨ Added `delay` to `restartWhen`.
+
 ## 2.1.0 - 07 Oct 2026
 
 - ✨ Added `Mallard.onStreamRestart`.

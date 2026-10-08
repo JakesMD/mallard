@@ -328,19 +328,16 @@ ResultStream<double, WeatherError> temperature = watchTemperature(city)
   .restartWhen(
 
     // Asked on each failure. attempt counts the restarts since the last success.
-    onFailure: (error, attempt) async {
-      await Future.delayed(Duration(seconds: 1 << attempt)); // Back off
-      return attempt < 5; // true restarts, false emits the failure
-    },
+    // true restarts, false emits the failure.
+    onFailure: (error, attempt) => attempt < 5,
 
     // Asked when the source closes
-    onClose: (attempt) async {
-      await Future.delayed(const Duration(seconds: 1));
-      return true;
-    },
+    onClose: (attempt) => true,
 
-    // The default: hide the failure while onFailure decides, and drop it on a
-    // restart. Pass false to emit it straight away.
+    // The wait before each restart. Leave it out to restart straight away.
+    delay: (attempt) => Duration(seconds: 1 << attempt), // Back off
+
+    // The default: drop the failure on a restart. Pass false to emit it first.
     hideFailure: true,
   );
 

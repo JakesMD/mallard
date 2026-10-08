@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:fake_async/fake_async.dart';
 import 'package:mallard/mallard.dart';
 import 'package:test/test.dart';
 import 'package:test_beautifier/test_beautifier.dart';
@@ -1847,52 +1848,21 @@ void main() {
 
       test(
         requirement(
-          given: 'a stream hiding failures with a pending decision',
-          whenever: 'the source emits more events and onFailure returns false',
-          then: 'they are held, then the failure and they are emitted in order',
+          given: 'a stream hiding failures',
+          whenever: 'the source fails, emits more and onFailure returns true',
+          then: 'the failure and everything after it are dropped',
         ),
         procedure(() async {
-          final decision = Completer<bool>();
           final log = record(
-            source
-                .restartWhen(onFailure: (f, attempt) => decision.future)
-                .run(),
+            source.restartWhen(onFailure: (f, attempt) => true).run(),
           );
           await pumpEventQueue();
-          sources.last
-            ..add(Failure('x', 'ex', fakeStack))
-            ..add(const Success(1))
-            ..add(const Success(2));
-          await pumpEventQueue();
-          expect(log, isEmpty);
-
-          decision.complete(false);
-          await pumpEventQueue();
-          expect(log, ['Fx', 'S1', 'S2']);
-        }),
-      );
-
-      test(
-        requirement(
-          given: 'a stream hiding failures with a pending decision',
-          whenever: 'the source emits more events and onFailure returns true',
-          then: 'the failure and held events are dropped and it restarts',
-        ),
-        procedure(() async {
-          final decision = Completer<bool>();
-          final log = record(
-            source
-                .restartWhen(onFailure: (f, attempt) => decision.future)
-                .run(),
-          );
-          await pumpEventQueue();
-          sources.last
+          final first = sources.last
             ..add(const Failure('x'))
             ..add(const Success(1));
           await pumpEventQueue();
-          decision.complete(true);
-          await pumpEventQueue();
 
+          expect(first.hasListener, false);
           expect(sources.length, 2);
           expect(log, isEmpty);
         }),
@@ -1929,46 +1899,13 @@ void main() {
         requirement(
           given: 'a stream not hiding failures',
           whenever: 'the source fails and onFailure returns true',
-          then: 'the failure is emitted straight away and the source restarts',
+          then: 'the failure is emitted and the source restarts',
         ),
         procedure(() async {
-          final decision = Completer<bool>();
           final log = record(
             source
                 .restartWhen(
-                  onFailure: (f, attempt) => decision.future,
-                  hideFailure: false,
-                )
-                .run(),
-          );
-          await pumpEventQueue();
-          sources.last.add(const Failure('x'));
-          await pumpEventQueue();
-          expect(log, ['Fx']);
-
-          decision.complete(true);
-          await pumpEventQueue();
-          expect(sources.length, 2);
-          expect(log, ['Fx']);
-        }),
-      );
-
-      test(
-        requirement(
-          given: 'a stream not hiding failures with a pending decision',
-          whenever: 'the source emits more events, including a failure',
-          then: 'they flow through and onFailure is not asked again',
-        ),
-        procedure(() async {
-          var asked = 0;
-          final decision = Completer<bool>();
-          final log = record(
-            source
-                .restartWhen(
-                  onFailure: (f, attempt) {
-                    asked++;
-                    return decision.future;
-                  },
+                  onFailure: (f, attempt) => true,
                   hideFailure: false,
                 )
                 .run(),
@@ -1976,77 +1913,164 @@ void main() {
           await pumpEventQueue();
           sources.last
             ..add(const Failure('x'))
-            ..add(const Success(1))
-            ..add(const Failure('y'));
+            ..add(const Success(1));
           await pumpEventQueue();
 
-          expect(asked, 1);
-          expect(log, ['Fx', 'S1', 'Fy']);
-        }),
-      );
-
-      test(
-        requirement(
-          given: 'a pending failure decision',
-          whenever: 'the source closes and onFailure returns false',
-          then: 'onClose is asked only after the decision',
-        ),
-        procedure(() async {
-          final decision = Completer<bool>();
-          final closeAttempts = <int>[];
-          final log = record(
-            source
-                .restartWhen(
-                  onFailure: (f, attempt) => decision.future,
-                  onClose: (attempt) {
-                    closeAttempts.add(attempt);
-                    return false;
-                  },
-                  hideFailure: false,
-                )
-                .run(),
-          );
-          await pumpEventQueue();
-          sources.last.add(const Failure('x'));
-          await sources.last.close();
-          await pumpEventQueue();
-          expect(closeAttempts, isEmpty);
-
-          decision.complete(false);
-          await pumpEventQueue();
-          expect(closeAttempts, [0]);
-          expect(log, ['Fx', 'done']);
-        }),
-      );
-
-      test(
-        requirement(
-          given: 'a pending failure decision',
-          whenever: 'the source closes and onFailure returns true',
-          then: 'the close is dropped and the source restarts',
-        ),
-        procedure(() async {
-          final decision = Completer<bool>();
-          var closeAsked = false;
-          final log = record(
-            source
-                .restartWhen(
-                  onFailure: (f, attempt) => decision.future,
-                  onClose: (attempt) => closeAsked = true,
-                  hideFailure: false,
-                )
-                .run(),
-          );
-          await pumpEventQueue();
-          sources.last.add(const Failure('x'));
-          await sources.last.close();
-          await pumpEventQueue();
-          decision.complete(true);
-          await pumpEventQueue();
-
-          expect(closeAsked, false);
           expect(sources.length, 2);
           expect(log, ['Fx']);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure with a delay',
+          whenever: 'the source fails',
+          then: 'the source is cancelled at once and rerun after the delay',
+        ),
+        procedure(() {
+          fakeAsync((async) {
+            final log = record(
+              source
+                  .restartWhen(
+                    onFailure: (f, attempt) => true,
+                    delay: (attempt) => const Duration(seconds: 1),
+                  )
+                  .run(),
+            );
+            async.flushMicrotasks();
+            final first = sources.last..add(const Failure('x'));
+            async.elapse(const Duration(milliseconds: 999));
+
+            expect(first.hasListener, false);
+            expect(sources.length, 1);
+
+            async.elapse(const Duration(milliseconds: 1));
+            sources.last.add(const Success(1));
+            async.flushMicrotasks();
+
+            expect(sources.length, 2);
+            expect(log, ['S1']);
+          });
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream not hiding failures with a delay',
+          whenever: 'the source fails and onFailure returns true',
+          then: 'the failure is emitted before the delay',
+        ),
+        procedure(() {
+          fakeAsync((async) {
+            final log = record(
+              source
+                  .restartWhen(
+                    onFailure: (f, attempt) => true,
+                    delay: (attempt) => const Duration(seconds: 1),
+                    hideFailure: false,
+                  )
+                  .run(),
+            );
+            async.flushMicrotasks();
+            sources.last.add(const Failure('x'));
+            async.flushMicrotasks();
+
+            expect(sources.length, 1);
+            expect(log, ['Fx']);
+          });
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure and close with a delay',
+          whenever: 'it restarts on a failure, then on a close',
+          then: 'delay is given the same attempt as the callback',
+        ),
+        procedure(() {
+          fakeAsync((async) {
+            final asked = <int>[];
+            final delayed = <int>[];
+            record(
+              source
+                  .restartWhen(
+                    onFailure: (f, attempt) {
+                      asked.add(attempt);
+                      return true;
+                    },
+                    onClose: (attempt) {
+                      asked.add(attempt);
+                      return attempt < 2;
+                    },
+                    delay: (attempt) {
+                      delayed.add(attempt);
+                      return const Duration(seconds: 1);
+                    },
+                  )
+                  .run(),
+            );
+            async.flushMicrotasks();
+            sources.last.add(const Failure('x'));
+            async.elapse(const Duration(seconds: 1));
+            unawaited(sources.last.close());
+            async.elapse(const Duration(seconds: 1));
+            unawaited(sources.last.close());
+            async.elapse(const Duration(seconds: 1));
+
+            expect(asked, [0, 1, 2]);
+            expect(delayed, [0, 1]);
+            expect(sources.length, 3);
+          });
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on failure',
+          whenever: 'delay throws',
+          then: 'an untyped error is emitted and the failure is given up on',
+        ),
+        procedure(() async {
+          final log = record(
+            source
+                .restartWhen(
+                  onFailure: (f, attempt) => true,
+                  delay: (attempt) => throw StateError('boom'),
+                )
+                .run(),
+          );
+          await pumpEventQueue();
+          sources.last
+            ..add(const Failure('x'))
+            ..add(const Success(1));
+          await pumpEventQueue();
+
+          expect(sources.length, 1);
+          expect(log, ['EBad state: boom', 'Fx', 'S1']);
+        }),
+      );
+
+      test(
+        requirement(
+          given: 'a stream restarted on close',
+          whenever: 'delay throws',
+          then: 'an untyped error is emitted and the stream closes',
+        ),
+        procedure(() async {
+          final log = record(
+            source
+                .restartWhen(
+                  onClose: (attempt) => true,
+                  delay: (attempt) => throw StateError('boom'),
+                )
+                .run(),
+          );
+          await pumpEventQueue();
+          await sources.last.close();
+          await pumpEventQueue();
+
+          expect(sources.length, 1);
+          expect(log, ['EBad state: boom', 'done']);
         }),
       );
 
@@ -2140,28 +2164,32 @@ void main() {
 
       test(
         requirement(
-          given: 'a pending failure decision',
+          given: 'a stream waiting out a restart delay',
           whenever: 'the listener cancels',
           then: 'the source is not run again and nothing is emitted',
         ),
-        procedure(() async {
-          final decision = Completer<bool>();
-          late StreamSubscription<Result<int, String>> sub;
-          final log = record(
-            source
-                .restartWhen(onFailure: (f, attempt) => decision.future)
-                .run(),
-            (s) => sub = s,
-          );
-          await pumpEventQueue();
-          sources.last.add(const Failure('x'));
-          await pumpEventQueue();
-          await sub.cancel();
-          decision.complete(true);
-          await pumpEventQueue();
+        procedure(() {
+          fakeAsync((async) {
+            late StreamSubscription<Result<int, String>> sub;
+            final log = record(
+              source
+                  .restartWhen(
+                    onFailure: (f, attempt) => true,
+                    delay: (attempt) => const Duration(seconds: 1),
+                  )
+                  .run(),
+              (s) => sub = s,
+            );
+            async.flushMicrotasks();
+            sources.last.add(const Failure('x'));
+            async.flushMicrotasks();
+            unawaited(sub.cancel());
+            async.elapse(const Duration(seconds: 1));
 
-          expect(sources.length, 1);
-          expect(log, isEmpty);
+            expect(async.pendingTimers, isEmpty);
+            expect(sources.length, 1);
+            expect(log, isEmpty);
+          });
         }),
       );
 
@@ -2210,34 +2238,37 @@ void main() {
 
       test(
         requirement(
-          given: 'a pending failure decision',
-          whenever: 'the listener pauses and the source restarts',
+          given: 'a stream waiting out a restart delay',
+          whenever: 'the listener pauses and the delay passes',
           then: 'the new source is paused until the listener resumes',
         ),
-        procedure(() async {
-          final decision = Completer<bool>();
-          late StreamSubscription<Result<int, String>> sub;
-          final log = record(
-            source
-                .restartWhen(onFailure: (f, attempt) => decision.future)
-                .run(),
-            (s) => sub = s,
-          );
-          await pumpEventQueue();
-          sources.last.add(const Failure('x'));
-          await pumpEventQueue();
-          sub.pause();
-          decision.complete(true);
-          await pumpEventQueue();
+        procedure(() {
+          fakeAsync((async) {
+            late StreamSubscription<Result<int, String>> sub;
+            final log = record(
+              source
+                  .restartWhen(
+                    onFailure: (f, attempt) => true,
+                    delay: (attempt) => const Duration(seconds: 1),
+                  )
+                  .run(),
+              (s) => sub = s,
+            );
+            async.flushMicrotasks();
+            sources.last.add(const Failure('x'));
+            async.flushMicrotasks();
+            sub.pause();
+            async.elapse(const Duration(seconds: 1));
 
-          expect(sources.length, 2);
-          expect(sources.last.isPaused, true);
+            expect(sources.length, 2);
+            expect(sources.last.isPaused, true);
 
-          sources.last.add(const Success(1));
-          sub.resume();
-          await pumpEventQueue();
-          expect(sources.last.isPaused, false);
-          expect(log, ['S1']);
+            sources.last.add(const Success(1));
+            sub.resume();
+            async.flushMicrotasks();
+            expect(sources.last.isPaused, false);
+            expect(log, ['S1']);
+          });
         }),
       );
 
@@ -2845,22 +2876,26 @@ void main() {
 
       test(
         requirement(
-          given: 'a listener that cancels while onFailure decides',
-          whenever: 'onFailure then returns true',
-          then: 'nothing is reported',
+          given: 'a stream restarted on failure with a delay',
+          whenever: 'the source fails',
+          then: 'the restart is reported before the delay passes',
         ),
-        procedure(() async {
-          final decided = Completer<bool>();
-          final sub = failingFirst(
-            1,
-          ).restartWhen(onFailure: (_, _) => decided.future).run().listen(null);
-          await pumpEventQueue();
-          await sub.cancel();
-          decided.complete(true);
-          await pumpEventQueue();
+        procedure(() {
+          fakeAsync((async) {
+            failingFirst(1)
+                .restartWhen(
+                  onFailure: (_, _) => true,
+                  delay: (_) => const Duration(seconds: 1),
+                )
+                .run()
+                .listen(null);
+            async.flushMicrotasks();
 
-          expect(restarts, isEmpty);
-          expect(runs, 1);
+            expect(restarts, [
+              ['x1', 'ex', fakeStack, 0],
+            ]);
+            expect(runs, 1);
+          });
         }),
       );
 

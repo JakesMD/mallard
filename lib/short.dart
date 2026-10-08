@@ -314,13 +314,15 @@ extension type const ResStream<S, F>._(t.ResultStream<S, F> _stream) {
 
   /// {@macro mallard.result_stream.restart_when}
   ResStream<S, F> restartWhen({
-    FutureOr<bool> Function(F err, int attempt)? onErr,
-    FutureOr<bool> Function(int attempt)? onClose,
+    bool Function(F err, int attempt)? onErr,
+    bool Function(int attempt)? onClose,
+    Duration Function(int attempt)? delay,
     bool hideErr = true,
   }) => ResStream._(
     _stream.restartWhen(
       onFailure: onErr,
       onClose: onClose,
+      delay: delay,
       hideFailure: hideErr,
     ),
   );

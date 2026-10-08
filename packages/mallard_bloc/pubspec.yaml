@@ -1,6 +1,6 @@
 name: mallard_bloc
 description: Take advantage of Mallards railway oriented programming to radically simplify bloc applications.
-version: 0.1.0
+version: 0.1.1
 repository: https://github.com/JakesMD/mallard/packages/mallard_bloc
 issue_tracker: https://github.com/JakesMD/mallard/issues
 topics: [mallard, bloc, result, task, error-handling]
@@ -13,7 +13,7 @@ environment:
 dependencies:
   bloc: ^9.2.0
   equatable: ^3.0.0
-  mallard: ^2.0.0
+  mallard: ">=2.0.0 <4.0.0"
 
 dev_dependencies:
   test: ^1.25.6

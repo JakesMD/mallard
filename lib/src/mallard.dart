@@ -33,8 +33,9 @@ class Mallard {
   )
   onStreamFailure = (_, _, _) {};
 
-  /// Called each time [ResultStream.restartWhen] restarts, with the failure
-  /// that caused it, or nulls on close. Fires for inner runs too.
+  /// Called each time [ResultStream.restartWhen] decides to restart, before
+  /// any delay, with the failure that caused it, or nulls on close. Fires for
+  /// inner runs too.
   static void Function(
     dynamic failure,
     Object? exception,

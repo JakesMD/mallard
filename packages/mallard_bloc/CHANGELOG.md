@@ -1,3 +1,7 @@
+## 0.1.1 - 08 Oct 2026
+
+- ✨ Supports `mallard` 3.0.0.
+
 ## 0.1.0 - 07 Oct 2026
 
 - 💥 **Breaking:** Requires `mallard` 2.0.0.
